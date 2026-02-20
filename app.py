@@ -3,6 +3,8 @@ import pickle
 import numpy as np
 import pandas as pd
 import streamlit as st
+import pickle
+from pathlib import Path
 
 
 # =========================
@@ -77,14 +79,27 @@ def add_job_ksco_7(df: pd.DataFrame) -> pd.DataFrame:
 # =========================
 @st.cache_resource
 def load_artifacts():
-    art_dir = "artifacts"
-    with open(os.path.join(art_dir, "model.pkl"), "rb") as f:
-        pipe = pickle.load(f)
-    with open(os.path.join(art_dir, "meta.pkl"), "rb") as f:
-        meta = pickle.load(f)
-    woe_table = pd.read_parquet(os.path.join(art_dir, "combo_woe_table.parquet"))
-    return pipe, meta, woe_table
+    # app.py 파일 위치 기준으로 artifacts 절대경로 생성
+    BASE_DIR = Path(__file__).resolve().parent
+    ART_DIR = BASE_DIR / "artifacts"
 
+    model_path = ART_DIR / "model.pkl"
+    meta_path  = ART_DIR / "meta.pkl"
+    woe_path   = ART_DIR / "combo_woe_table.parquet"
+
+    # 디버그(한 번만): 경로/존재 여부 확인
+    # st.write("BASE_DIR:", str(BASE_DIR))
+    # st.write("ART_DIR:", str(ART_DIR))
+    # st.write("Files:", [p.name for p in ART_DIR.glob("*")])
+
+    with open(model_path, "rb") as f:
+        pipe = pickle.load(f)
+
+    with open(meta_path, "rb") as f:
+        meta = pickle.load(f)
+
+    combo_woe_table = pd.read_parquet(woe_path)
+    return pipe, meta, combo_woe_table
 
 def score(df_in: pd.DataFrame, pipe, meta):
     df2 = df_in.copy()
