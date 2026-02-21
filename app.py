@@ -93,6 +93,19 @@ def load_artifacts():
     combo_woe_table = pd.read_parquet(art_dir / "combo_woe_table.parquet")
     return pipe, meta, combo_woe_table
 
+def ensure_feature_columns(df_one: pd.DataFrame, meta: dict):
+    df = df_one.copy()
+    required = meta.get("feature_cols")
+    defaults = meta.get("defaults")
+
+    if required is None or defaults is None:
+        raise ValueError("meta.pkl에 feature_cols/defaults가 없습니다. train.py 수정 후 재생성 필요.")
+
+    for col in required:
+        if col not in df.columns:
+            df[col] = defaults.get(col, 0)
+
+    return df[required]
 
 def score(df_in: pd.DataFrame, pipe, meta):
     """
@@ -248,7 +261,8 @@ with tabs[1]:
         st.warning("CSV를 업로드하면 결과(확률/등급/요약)가 표시됩니다.")
     else:
         df_new = pd.read_csv(up)
-
+        
+        df_new = ensure_feature_columns(df_new, meta)
         proba, grade_vec, df2 = score(df_new, pipe, meta)
         out = df_new.copy()
         out["pred_prob"] = proba
