@@ -388,7 +388,7 @@ with tabs[4]:
                 out.groupby(["risk_grade", col]).size().reset_index(name="count")
             )
             # 100% stacked bar용 비율
-            tmp["pct"] = tmp.groupby("risk_grade")["count"].apply(lambda x: x / x.sum())
+            tmp["pct"] = tmp["count"] / tmp.groupby("risk_grade")["count"].transform("sum")
 
             fig = px.bar(tmp, x="risk_grade", y="pct", color=col,
                          title=f"{col} composition by Risk Grade (100%)",
