@@ -479,8 +479,8 @@ with tabs[5]:
         grade = grade_vec[0]
         p = float(proba[0])
 
-        # 짜잔 출력
-        st.success(f"짜잔! 예측 연체확률: **{p:.3f}** | 위험등급: **{grade}**")
+        # 출력
+        st.success(f"예측 연체확률: **{p:.3f}** | 위험등급: **{grade}**")
 
         # 게이지 느낌 바
         st.progress(min(max(p, 0.0), 1.0))
