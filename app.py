@@ -107,41 +107,45 @@ def ensure_feature_columns(df_one: pd.DataFrame, meta: dict):
 
     return df[required]
 
+def align_to_feature_cols(df2: pd.DataFrame, meta: dict) -> pd.DataFrame:
+    required = meta.get("feature_cols")
+    defaults = meta.get("defaults")
+    if required is None or defaults is None:
+        raise ValueError("meta.pkl에 feature_cols/defaults가 없습니다.")
+
+    # 누락 컬럼 채우기
+    for c in required:
+        if c not in df2.columns:
+            df2[c] = defaults.get(c, 0)
+
+    # 불필요 컬럼 제거 + 순서 정렬
+    df2 = df2[required]
+    return df2
+
+
 def score(df_in: pd.DataFrame, pipe, meta):
-    """
-    Returns:
-      proba: np.array
-      grade_vec: np.array[str]
-      df2: model input dataframe after FE/WOE/drop (for reason codes)
-    """
     df2 = df_in.copy()
     df2 = add_industry_reclass(df2)
     df2 = add_job_ksco_7(df2)
 
-    # 산업×직업 combo → WOE 적용
     combo = (df2["산업군_재분류"].astype(str) + " × " + df2["직업_KSCO_7그룹"].astype(str))
     seen = set(meta["woe_map_combo"].keys())
     combo = combo.where(combo.isin(seen), "OTHERS").astype("object")
-
     df2["고용안정성_WOE"] = combo.map(meta["woe_map_combo"]).fillna(0.0).astype(float)
 
-    # 원본 직업/산업 컬럼 drop (훈련과 동일)
+    # drop
     df2 = df2.drop(columns=meta["drop_cols"], errors="ignore")
 
+    # ✅ 여기서 최종 정렬/보정 (이게 핵심)
+    df2 = align_to_feature_cols(df2, meta)
+
     proba = pipe.predict_proba(df2)[:, 1]
+
     high_cut = meta["high_cut"]
     mid_cut = meta["mid_cut"]
-
-    def grade(p):
-        if p >= high_cut:
-            return "High"
-        elif p >= mid_cut:
-            return "Mid"
-        else:
-            return "Low"
-
-    grade_vec = pd.Series(proba).apply(grade).values
+    grade_vec = np.where(proba >= high_cut, "High", np.where(proba >= mid_cut, "Mid", "Low"))
     return proba, grade_vec, df2
+
 
 
 def get_or_table(pipe, top_k=15):
