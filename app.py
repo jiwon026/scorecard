@@ -80,7 +80,7 @@ def add_job_ksco_7(df: pd.DataFrame) -> pd.DataFrame:
 # Load artifacts
 # =========================
 @st.cache_resource
-def load_artifacts():
+def load_artifacts(_version="v2"):
     base = Path(__file__).resolve().parent
     art_dir = base / "artifacts"
 
@@ -190,7 +190,7 @@ def top_reason_codes(pipe, X_row: pd.DataFrame, top_k=7):
 # =========================
 st.set_page_config(page_title="CardScore | Delinquency Risk Dashboard", layout="wide")
 
-pipe, meta, combo_woe_table = load_artifacts()
+pipe, meta, combo_woe_table = load_artifacts("v2")
 df_or, or_high, or_low = get_or_table(pipe, top_k=15)
 
 st.title("CardScore — 연체 리스크 예측 & 선제적 관리 대시보드")
