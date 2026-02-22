@@ -740,15 +740,18 @@ with tabs[0]:
         # ---- 전체 평균 기준선 ----
         overall = kpi.get("overall_dr", np.nan)
         if not np.isnan(overall):
-            ax2.axhline(overall * 100, color="black", linestyle="--")
+            y = overall * 100
+            ax2.axhline(y, color="gray", linestyle="--", linewidth=1.5)
+        
+            # x축 오른쪽 바깥쪽에 라벨 고정
             ax2.text(
-                len(x)-1,
-                overall * 100,
-                f" 전체 평균 {overall*100:.2f}%",
-                ha="right",
-                va="bottom",
-                fontsize=9,
-                color="black"
+                1.01, y,
+                f"전체 평균 {y:.2f}%",
+                transform=ax2.get_yaxis_transform(),  # x는 축좌표(0~1), y는 데이터좌표
+                ha="left", va="center",
+                fontsize=11, fontweight="bold",
+                color="black",
+                bbox=dict(facecolor="white", edgecolor="none", alpha=0.85, pad=2)
             )
         
         st.pyplot(fig, use_container_width=True)
