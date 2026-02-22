@@ -582,7 +582,7 @@ def _upper_from_full_industry(s: str):
 
 
 @st.cache_data(show_spinner=False)
-def build_upper_industry_options_and_rep(job_ind_df: pd.DataFrame, sample_path: sample_scoring.csv):
+def build_upper_industry_options_and_rep(job_ind_df: pd.DataFrame, sample_path: path):
     """
     - 선택지: sample_scoring(또는 train_data)에서 산업군_상위 unique를 가져오되,
       무역/산업/운송은 제거
