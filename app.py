@@ -390,6 +390,184 @@ def score_one(row: dict,
     bd = pd.DataFrame(breakdown, columns=["feature", "value/bin", "points"]).sort_values("points")
     return score, proba, grade, bd
 
+# =========================
+# Portfolio KPI helpers
+# =========================
+def score_one_fast(row: dict,
+                   meta,
+                   cont_map,
+                   cat_map,
+                   cross_map,
+                   bin_map,
+                   flag_map,
+                   job_ind_map):
+    """
+    score_one()의 '포트폴리오 일괄 산출용' 경량 버전
+    - breakdown DataFrame 생성 없음(속도↑)
+    - score, proba만 반환
+    """
+    score = meta["base_points"]
+
+    # ---- continuous
+    cont_inputs = {
+        "근속연수_woe": float(row.get("근속연수", np.nan)),
+        "나이_woe": float(row.get("나이", np.nan)),
+        "거주지 인구 비율_woe": float(row.get("거주지 인구 비율", np.nan)),
+        "가입연수_woe": float(row.get("가입연수", np.nan)),
+        "가족 구성원 수_woe": float(row.get("가족 구성원 수", np.nan)),
+        "연간수입_woe": float(row.get("연간 수입", np.nan)),
+    }
+    for feat, x in cont_inputs.items():
+        if feat not in cont_map:
+            continue
+        labels = list(cont_map[feat].keys())
+        lab = match_numeric_label(x, labels)
+        if lab is None:
+            continue
+        score += float(cont_map[feat].get(lab, 0.0))
+
+    # ---- categorical
+    cat_inputs = {
+        "수입 유형_woe": row.get("수입 유형"),
+        "최종 학력_woe": row.get("최종 학력"),
+        "결혼 여부_woe": row.get("결혼 여부"),
+        "주거 형태_woe": row.get("주거 형태"),
+        "자녀수_구간_woe": row.get("자녀수_구간"),
+    }
+    for feat, val in cat_inputs.items():
+        if feat not in cat_map or val is None:
+            continue
+        score += float(cat_map[feat].get(str(val).strip(), 0.0))
+
+    # ---- binary (엑셀 점수카드 feature명을 그대로 사용)
+    for f in bin_map.keys():
+        if f in row:
+            try:
+                v = int(row[f])
+            except Exception:
+                continue
+            score += float(bin_map[f].get(v, 0.0))
+
+    # ---- cross
+    if "성별x결혼여부_woe" in cross_map:
+        sex = row.get("성별", "남성")
+        mar = row.get("결혼 여부", "미혼")
+        sex_code = 1 if str(sex).strip() == "남성" else 0
+        key = f"{sex_code}_{mar}"
+        score += float(cross_map["성별x결혼여부_woe"].get(key, 0.0))
+
+    # ---- flags (flag_map이 비어있으면 자동 스킵)
+    if flag_map:
+        if "한부모 가정" in flag_map:
+            spouse = int(row.get("배우자유무", 1))
+            child_n = int(row.get("자녀 수", 0))
+            is_single_parent = 1 if (spouse == 0 and child_n > 0) else 0
+            score += float(flag_map["한부모 가정"].get(is_single_parent, 0.0))
+
+        if "저소득_부동산 X" in flag_map:
+            income = float(row.get("연간 수입", np.nan))
+            real_estate = int(row.get("부동산 소유 여부", 0))
+            is_low_income = 1 if (not np.isnan(income) and income <= 37_170_000) else 0
+            flag_val = 1 if (is_low_income == 1 and real_estate == 0) else 0
+            score += float(flag_map["저소득_부동산 X"].get(flag_val, 0.0))
+
+        if "2,30대_저학력,고졸" in flag_map:
+            age = float(row.get("나이", np.nan))
+            edu = str(row.get("최종 학력", "")).strip()
+            flag_val = 1 if ((not np.isnan(age) and age < 40) and (edu in ["저학력자", "고등학교 졸업"])) else 0
+            score += float(flag_map["2,30대_저학력,고졸"].get(flag_val, 0.0))
+
+    # ---- job x industry
+    job = str(row.get("직업", "Unknown")).strip()
+    ind = str(row.get("산업군", "")).strip()
+    score += float(job_ind_map.get((job, ind), 0.0))
+
+    # ---- probability (score -> logit)
+    logit = (meta["offset"] - score) / meta["factor"]
+    proba = float(sigmoid(logit))
+    return score, proba
+def load_sample_df(art_dir: Path) -> pd.DataFrame:
+    """
+    artifacts 폴더에서 샘플 데이터를 읽어옴.
+    우선순위:
+      1) sample_scoring.parquet
+      2) sample_scoring.csv
+    """
+    pqt = art_dir / "sample_scoring.parquet"
+    csv = art_dir / "sample_scoring.csv"
+
+    if pqt.exists():
+        try:
+            return pd.read_parquet(pqt)  # pyarrow/fastparquet 필요
+        except Exception as e:
+            st.warning(
+                "sample_scoring.parquet를 읽지 못해 CSV로 시도합니다. "
+                "parquet를 쓰려면 requirements.txt에 pyarrow를 추가하세요."
+            )
+
+    if csv.exists():
+        return pd.read_csv(csv)
+
+    raise FileNotFoundError(
+        f"샘플 파일이 없습니다. 다음 중 하나를 artifacts/에 넣어주세요: {pqt.name} 또는 {csv.name}"
+    )                       
+
+
+@st.cache_data(show_spinner=False)
+def compute_portfolio_kpis_from_df(df: pd.DataFrame,
+                                  meta,
+                                  cont_map,
+                                  cat_map,
+                                  cross_map,
+                                  bin_map,
+                                  flag_map,
+                                  job_ind_map):
+    # 확률 산출
+    records = df.to_dict("records")
+    probas = np.empty(len(records), dtype=float)
+    for i, r in enumerate(records):
+        _, p = score_one_fast(r, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map)
+        probas[i] = p
+
+    # Cut: Top20% = High, Top60% = Mid 이상
+    high_cut = float(np.quantile(probas, 0.80))
+    mid_cut  = float(np.quantile(probas, 0.40))
+
+    grade = np.where(probas >= high_cut, "High",
+             np.where(probas >= mid_cut, "Mid", "Low"))
+
+    out = {
+        "n": int(len(df)),
+        "high_cut": high_cut,
+        "mid_cut": mid_cut,
+        "high_share": float((grade == "High").mean()),
+        "mid_share": float((grade == "Mid").mean()),
+        "low_share": float((grade == "Low").mean()),
+    }
+
+    # TARGET이 있으면 “사업 KPI(연체율/포착률)”까지 계산
+    if "TARGET" in df.columns:
+        y = df["TARGET"].astype(int).values
+        high_mask = (grade == "High")
+        low_mask  = (grade == "Low")
+
+        overall_dr = y.mean()
+        high_dr = y[high_mask].mean() if high_mask.any() else np.nan
+        low_dr  = y[low_mask].mean()  if low_mask.any()  else np.nan
+
+        total_bad = (y == 1).sum()
+        bad_capture_high = (y[high_mask] == 1).sum() / total_bad if total_bad > 0 else np.nan
+        risk_gap = (high_dr / low_dr) if (not np.isnan(high_dr) and not np.isnan(low_dr) and low_dr > 0) else np.nan
+
+        out.update({
+            "overall_dr": float(overall_dr),
+            "high_dr": float(high_dr),
+            "low_dr": float(low_dr),
+            "bad_capture_high": float(bad_capture_high),
+            "risk_gap": float(risk_gap) if not np.isnan(risk_gap) else np.nan,
+        })
+
+    return out
 
 # =========================
 # 4) Streamlit UI
@@ -415,21 +593,62 @@ tabs = st.tabs([
 
 # ---- Overview
 with tabs[0]:
-    st.subheader("Executive Summary (심사위원 30초 버전)")
+    st.subheader("Executive Summary")
     st.info(
-        "본 모델은 고객 기본정보만으로 연체 위험을 조기 식별하고 High/Mid/Low 3등급으로 분류합니다. "
-        "특히 직업×산업군 조합 점수(고용 안정성 관점)와 WOE 기반 스코어카드를 통해 "
-        "‘설명가능 + 운영가능’한 정책 연결을 강조합니다."
+        "이 대시보드는 고객의 기본 정보만으로 연체 위험을 사전에 예측하고, "
+        "위험 수준별(High/Mid/Low)로 구분하여 선제적인 관리 전략을 실행할 수 있도록 지원하는 의사결정 도구입니다. "
+        "예측 결과는 한도 조정, 모니터링 강화, 우량고객 유지 전략 등 실제 운영 정책으로 바로 연결됩니다."
     )
 
+    st.markdown("### 📊 Risk Distribution & Business Impact (Sample 기반)")
+
+    base_dir = Path(__file__).resolve().parent
+    art_dir = base_dir / "artifacts"
+
+    try:
+        sample_df = load_sample_df(art_dir)
+        kpi = compute_portfolio_kpis_from_df(
+            sample_df, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map
+        )
+
+        k1, k2, k3, k4 = st.columns(4)
+
+        # 1) 경영진이 바로 이해하는 KPI 우선
+        k1.metric("High Risk 고객 비중", f"{kpi['high_share']*100:.1f}%")
+        if "high_dr" in kpi:
+            k2.metric("High 고객 연체율", f"{kpi['high_dr']*100:.2f}%")
+            k3.metric("Low 고객 연체율",  f"{kpi['low_dr']*100:.2f}%")
+            k4.metric("연체자 High 포착률", f"{kpi['bad_capture_high']*100:.1f}%")
+        else:
+            k2.metric("Mid 고객 비중", f"{kpi['mid_share']*100:.1f}%")
+            k3.metric("Low 고객 비중", f"{kpi['low_share']*100:.1f}%")
+            k4.metric("샘플 수", f"{kpi['n']:,}")
+
+        # 컷 값은 참고용(작게)
+        cap = f"Cut(참고용) | High(Top20%): {kpi['high_cut']:.4f} | Mid(Top60%): {kpi['mid_cut']:.4f} | n={kpi['n']:,}"
+        if "overall_dr" in kpi:
+            extra = f" | 전체 연체율: {kpi['overall_dr']*100:.2f}%"
+            if not np.isnan(kpi.get("risk_gap", np.nan)):
+                extra += f" | High/Low 위험도 격차: {kpi['risk_gap']:.1f}x"
+            cap += extra
+        st.caption(cap)
+
+    except Exception as e:
+        st.warning(f"샘플 KPI를 계산하지 못했습니다: {e}")
+
+    # 모델 내부 파라미터는 '보조'로 아래쪽에 작게
+    st.divider()
+    st.markdown("### 모델 설정값 (참고용)")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Base Score", f"{meta['base_score']:.0f}" if not np.isnan(meta["base_score"]) else "-")
     c2.metric("PDO", f"{meta['PDO']:.0f}" if not np.isnan(meta["PDO"]) else "-")
     c3.metric("Factor", f"{meta['factor']:.3f}")
     c4.metric("Base Points", f"{meta['base_points']:.2f}")
 
+    st.caption("Model Performance (Validation) | AUC: 0.645  |  KS: 0.215  |  Gini: 0.29")
+
     st.divider()
-    st.markdown("### 운영 정책 예시 (Risk Grade Action)")
+    st.markdown("### 🎯 운영 정책 예시 (Risk Grade Action)")
     a, b, c = st.columns(3)
     with a:
         st.markdown("#### 🔴 High")
