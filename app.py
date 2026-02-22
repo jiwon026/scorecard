@@ -569,39 +569,28 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
 
     return out
 
-def _upper_from_full_industry(s: str):
-    """
-    job_ind_df의 '산업군' 값이 보통 '상위 0' 형태(예: '교육 2')라고 가정하고,
-    여기서 상위만 뽑아냄.
-    """
+def _upper_from_full_industry(s: str) -> str:
     s = str(s).strip()
     parts = s.split()
+    # 예: "교육 2" -> "교육"
     if len(parts) >= 2 and parts[-1].isdigit():
         return " ".join(parts[:-1]).strip()
-    return s  # 예외 케이스는 그냥 전체를 상위로 취급
-
+    return s
 
 @st.cache_data(show_spinner=False)
-def build_upper_industry_options_and_rep(job_ind_df: pd.DataFrame, sample_path: path):
+def build_upper_industry_options_and_rep(job_ind_df: pd.DataFrame, sample_path: Path):
     """
-    - 선택지: sample_scoring(또는 train_data)에서 산업군_상위 unique를 가져오되,
-      무역/산업/운송은 제거
-    - 대표 매핑: 선택된 산업군_상위 -> job_ind_df에서 실제 존재하는 '산업군' 문자열(예: '교육 2')
+    - 선택지: sample_scoring에서 산업군_상위 unique를 가져오되, 무역/산업/운송은 제거
+    - 대표 매핑: 산업군_상위 -> job_ind_df의 '산업군' (예: '교육 2') 중 대표 1개로 매핑
     """
-    # 1) 선택지 후보: sample_scoring에서 '산업군_상위'를 읽어오기
-    #    (parquet/csv 둘 다 처리)
-    base_dir = Path(__file__).resolve().parent
-    art_dir = base_dir / "artifacts"
-    
-    sample_path = art_dir / "sample_scoring.parquet"
-    if not sample_path.exists():
-        sample_path = art_dir / "sample_scoring.csv"
-    
-    industry_upper_options, upper_to_rep_full = \
-        build_upper_industry_options_and_rep(job_ind_df, sample_path)
+    # 1) sample_scoring 읽기
+    if sample_path.suffix.lower() == ".parquet":
+        df_s = pd.read_parquet(sample_path)
+    else:
+        df_s = pd.read_csv(sample_path)
 
     if "산업군_상위" not in df_s.columns:
-        raise ValueError("샘플 파일에 '산업군_상위' 컬럼이 없습니다. (train_data.csv의 컬럼명 확인 필요)")
+        raise ValueError("샘플 파일에 '산업군_상위' 컬럼이 없습니다.")
 
     options = (
         df_s["산업군_상위"]
@@ -615,19 +604,15 @@ def build_upper_industry_options_and_rep(job_ind_df: pd.DataFrame, sample_path: 
     # 2) 무역/산업/운송 제거
     banned = {"무역", "산업", "운송"}
     options = [x for x in options if x not in banned]
+    options = sorted(options)
 
     # 3) 대표 매핑(상위 -> 실제 산업군 문자열)
-    #    job_ind_df의 '산업군'에 존재하는 값들 중 같은 상위로 시작하는 첫 값을 대표로 사용
     rep = {}
     if "산업군" in job_ind_df.columns:
-        full_list = job_ind_df["산업군"].dropna().astype(str).tolist()
-        for full in full_list:
+        for full in job_ind_df["산업군"].dropna().astype(str):
             up = _upper_from_full_industry(full)
             if up not in rep:
                 rep[up] = full
-
-    # 옵션 정렬(가독성)
-    options = sorted(options)
 
     return options, rep
 
@@ -744,12 +729,8 @@ with tabs[1]:
     sample_path = art_dir / "sample_scoring.parquet"
     if not sample_path.exists():
         sample_path = art_dir / "sample_scoring.csv"
-
-    try:
-        industry_upper_options, upper_to_rep_full = build_upper_industry_options_and_rep(job_ind_df, sample_path)
-    except Exception as e:
-        industry_upper_options, upper_to_rep_full = [], {}
-        st.warning(f"산업군(상위) 옵션을 불러오지 못했습니다: {e}")
+    
+    industry_upper_options, upper_to_rep_full = build_upper_industry_options_and_rep(job_ind_df, sample_path)
 
     # 옵션이 비면 fallback(최소 동작)
     if not industry_upper_options:
