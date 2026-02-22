@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 # =========================
 # 0) Excel Loader
@@ -691,29 +692,35 @@ with tabs[0]:
         # 2) 등급별 분포 (A~E)
         # =========================
         st.markdown("### 등급별 분포 (A~E)")
-
-        # compute_portfolio_kpis_from_df 최신 버전은 grade_dist/grade_dist_n을 반환한다고 가정
-        grade_order = ["A", "B", "C", "D", "E"]
-        if "grade_dist" in kpi and "grade_dist_n" in kpi:
+        if "grade_dist_n" in kpi and "grade_dist" in kpi:
+            grade_order = ["A", "B", "C", "D", "E"]
             dist_df = pd.DataFrame({
                 "등급": grade_order,
                 "고객수": [kpi["grade_dist_n"].get(g, 0) for g in grade_order],
-                "비중": [kpi["grade_dist"].get(g, 0.0) for g in grade_order],
+                "비중(%)": [round(kpi["grade_dist"].get(g, 0.0) * 100, 1) for g in grade_order],
             })
-            dist_df["비중(%)"] = (dist_df["비중"] * 100).round(1)
-            dist_df = dist_df.drop(columns=["비중"])
-
-            st.dataframe(dist_df, use_container_width=True)
+        
+            # ✅ 가로 막대: 비중(%) 기준
+            st.bar_chart(dist_df.set_index("등급")["비중(%)"])
 
             # TARGET 있으면 등급별 실제 연체율까지(경영진 설득력↑)
+            import matplotlib.pyplot as plt
+
             if "dr_by_grade" in kpi:
                 st.markdown("### 등급별 실제 연체율 (샘플 기준)")
-                dr_df = pd.DataFrame({
-                    "등급": grade_order,
-                    "연체율(%)": [round(kpi["dr_by_grade"].get(g, np.nan) * 100, 2) for g in grade_order],
-                })
-                st.dataframe(dr_df, use_container_width=True)
-                st.caption(f"전체 연체율(샘플): {kpi.get('overall_dr', np.nan)*100:.2f}%")
+            
+                grade_order = ["A", "B", "C", "D", "E"]
+                dr = [kpi["dr_by_grade"].get(g, np.nan) * 100 for g in grade_order]
+                overall = kpi.get("overall_dr", np.nan) * 100
+            
+                fig, ax = plt.subplots()
+                ax.bar(grade_order, dr)
+                if not np.isnan(overall):
+                    ax.axhline(overall, linestyle="--")
+                    ax.text(0.02, overall, f" 전체 평균 {overall:.2f}%", va="bottom")
+            
+                ax.set_ylabel("연체율(%)")
+                st.pyplot(fig, use_container_width=True)
 
         else:
             st.info("등급(A~E) 분포를 표시하려면 compute_portfolio_kpis_from_df를 A~E 버전으로 업데이트해 주세요.")
