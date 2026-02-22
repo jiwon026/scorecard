@@ -687,7 +687,7 @@ with tabs[0]:
             sample_df, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map
         )
 
-        st.markdown("### 📊 Main Dashboard (Risk Snapshot)")
+        st.markdown("### 📊 Risk Distribution & Business Impact")
 
         # ---- KPI 4개 (추천)
         k1, k2, k3, k4 = st.columns(4)
