@@ -600,6 +600,9 @@ with tabs[0]:
         "예측 결과는 한도 조정, 모니터링 강화, 우량고객 유지 전략 등 실제 운영 정책으로 바로 연결됩니다."
     )
 
+    # =========================
+    # 1) 경영진용 핵심 KPI (Sample 기반)
+    # =========================
     st.markdown("### 📊 Risk Distribution & Business Impact (Sample 기반)")
 
     base_dir = Path(__file__).resolve().parent
@@ -612,9 +615,9 @@ with tabs[0]:
         )
 
         k1, k2, k3, k4 = st.columns(4)
-
-        # 1) 경영진이 바로 이해하는 KPI 우선
         k1.metric("High Risk 고객 비중", f"{kpi['high_share']*100:.1f}%")
+
+        # 샘플에 TARGET이 있으면 사업 KPI까지 보여줌
         if "high_dr" in kpi:
             k2.metric("High 고객 연체율", f"{kpi['high_dr']*100:.2f}%")
             k3.metric("Low 고객 연체율",  f"{kpi['low_dr']*100:.2f}%")
@@ -624,31 +627,33 @@ with tabs[0]:
             k3.metric("Low 고객 비중", f"{kpi['low_share']*100:.1f}%")
             k4.metric("샘플 수", f"{kpi['n']:,}")
 
-        # 컷 값은 참고용(작게)
-        cap = f"Cut(참고용) | High(Top20%): {kpi['high_cut']:.4f} | Mid(Top60%): {kpi['mid_cut']:.4f} | n={kpi['n']:,}"
+        # Cut 값은 참고용으로 작게
+        cap = (
+            f"Cut(참고용) | High(Top20%): {kpi['high_cut']:.4f} | "
+            f"Mid(Top60%): {kpi['mid_cut']:.4f} | n={kpi['n']:,}"
+        )
         if "overall_dr" in kpi:
-            extra = f" | 전체 연체율: {kpi['overall_dr']*100:.2f}%"
-            if not np.isnan(kpi.get("risk_gap", np.nan)):
-                extra += f" | High/Low 위험도 격차: {kpi['risk_gap']:.1f}x"
-            cap += extra
+            cap += f" | 전체 연체율: {kpi['overall_dr']*100:.2f}%"
+            rg = kpi.get("risk_gap", np.nan)
+            if not np.isnan(rg):
+                cap += f" | High/Low 위험도 격차: {rg:.1f}x"
         st.caption(cap)
 
     except Exception as e:
         st.warning(f"샘플 KPI를 계산하지 못했습니다: {e}")
+    st.caption("※ 아래 KPI는 데이터 전체가 아닌 샘플(랜덤 n=2,000) 기준으로 산출되었습니다.")
 
-    # 모델 내부 파라미터는 '보조'로 아래쪽에 작게
-    st.divider()
-    st.markdown("### 모델 설정값 (참고용)")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Base Score", f"{meta['base_score']:.0f}" if not np.isnan(meta["base_score"]) else "-")
-    c2.metric("PDO", f"{meta['PDO']:.0f}" if not np.isnan(meta["PDO"]) else "-")
-    c3.metric("Factor", f"{meta['factor']:.3f}")
-    c4.metric("Base Points", f"{meta['base_points']:.2f}")
-
+    # =========================
+    # 2) 모델 성능 지표는 '보조'로만 (작게)
+    # =========================
     st.caption("Model Performance (Validation) | AUC: 0.645  |  KS: 0.215  |  Gini: 0.29")
 
+    # =========================
+    # 3) 운영 정책 예시
+    # =========================
     st.divider()
     st.markdown("### 🎯 운영 정책 예시 (Risk Grade Action)")
+
     a, b, c = st.columns(3)
     with a:
         st.markdown("#### 🔴 High")
