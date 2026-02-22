@@ -522,7 +522,6 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
                                   bin_map,
                                   flag_map,
                                   job_ind_map):
-    # 확률 산출
     records = df.to_dict("records")
     probas = np.empty(len(records), dtype=float)
     for i, r in enumerate(records):
@@ -532,7 +531,7 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
     n = int(len(df))
     avg_pd = float(np.mean(probas)) if n > 0 else np.nan
 
-    # 5등급(A~E): 분위수 기준 (A가 가장 위험)
+    # 5등급(A~E): A가 가장 위험
     q90 = float(np.quantile(probas, 0.90))
     q70 = float(np.quantile(probas, 0.70))
     q40 = float(np.quantile(probas, 0.40))
@@ -544,10 +543,10 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
               np.where(probas >= q15, "D", "E"))))
 
     grade_order = ["A", "B", "C", "D", "E"]
-    dist = {g: float(np.mean(grade5 == g)) for g in grade_order}  # 비율
-    dist_n = {g: int(np.sum(grade5 == g)) for g in grade_order}   # 명수
+    grade_dist = {g: float(np.mean(grade5 == g)) for g in grade_order}
+    grade_dist_n = {g: int(np.sum(grade5 == g)) for g in grade_order}
 
-    # 고위험군: A+B (상위 30%)로 정의(원하면 A만(10%)으로 바꿀 수 있음)
+    # 고위험군: A+B(상위 30%)
     high_mask = np.isin(grade5, ["A", "B"])
     high_share = float(np.mean(high_mask))
     high_avg_pd = float(np.mean(probas[high_mask])) if high_mask.any() else np.nan
@@ -557,12 +556,10 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
         "avg_pd": avg_pd,
         "high_share": high_share,
         "high_avg_pd": high_avg_pd,
-        "grade_dist": dist,
-        "grade_dist_n": dist_n,
-        "cuts": {"A": q90, "B": q70, "C": q40, "D": q15},
+        "grade_dist": grade_dist,
+        "grade_dist_n": grade_dist_n,
     }
 
-    # TARGET 있으면 등급별 실제 연체율도 같이
     if "TARGET" in df.columns:
         y = df["TARGET"].astype(int).values
         dr_by_grade = {}
