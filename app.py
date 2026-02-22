@@ -8,6 +8,29 @@ from pathlib import Path
 # =========================
 # 0) Excel Loader
 # =========================
+def safe_parse(xls: pd.ExcelFile, candidates, required=True) -> pd.DataFrame:
+    # 후보 시트명들을 순서대로 시도해서 있으면 parse
+    sheet_names = list(xls.sheet_names)
+
+    # 1) 정확 매칭 (대소문자/공백 무시)
+    norm = {s.strip().lower(): s for s in sheet_names}
+    for c in candidates:
+        key = str(c).strip().lower()
+        if key in norm:
+            return xls.parse(norm[key])
+
+    # 2) 부분 포함 매칭 (예: scorecard_flag_v2 같은 경우)
+    for s in sheet_names:
+        s_norm = s.strip().lower()
+        for c in candidates:
+            if str(c).strip().lower() in s_norm:
+                return xls.parse(s)
+
+    # 3) 없으면 처리
+    if required:
+        raise ValueError(f"Worksheet not found. tried={candidates}, available={sheet_names}")
+    return pd.DataFrame()
+
 @st.cache_resource
 def load_scorecard_excel(_version: str = "v1"):
     base_dir = Path(__file__).resolve().parent
