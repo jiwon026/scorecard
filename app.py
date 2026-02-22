@@ -590,10 +590,15 @@ def build_upper_industry_options_and_rep(job_ind_df: pd.DataFrame, sample_path: 
     """
     # 1) 선택지 후보: sample_scoring에서 '산업군_상위'를 읽어오기
     #    (parquet/csv 둘 다 처리)
-    if sample_path.suffix.lower() == ".parquet":
-        df_s = pd.read_parquet(sample_path)
-    else:
-        df_s = pd.read_csv(sample_path)
+    base_dir = Path(__file__).resolve().parent
+    art_dir = base_dir / "artifacts"
+    
+    sample_path = art_dir / "sample_scoring.parquet"
+    if not sample_path.exists():
+        sample_path = art_dir / "sample_scoring.csv"
+    
+    industry_upper_options, upper_to_rep_full = \
+        build_upper_industry_options_and_rep(job_ind_df, sample_path)
 
     if "산업군_상위" not in df_s.columns:
         raise ValueError("샘플 파일에 '산업군_상위' 컬럼이 없습니다. (train_data.csv의 컬럼명 확인 필요)")
