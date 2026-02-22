@@ -9,7 +9,7 @@ import matplotlib as mpl
 
 # ---- 한글 설정 ----
 mpl.rcParams["axes.unicode_minus"] = False
-mpl.rcParams["font.family"] = "sans-serif"
+mpl.rcParams["font.family"] = "NanumGothic"
 
 # =========================
 # 0) Excel Loader
