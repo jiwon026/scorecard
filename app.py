@@ -744,16 +744,15 @@ with tabs[0]:
             ax2.axhline(y, color="gray", linestyle="--", linewidth=1.5)
         
             # 🔥 왼쪽 내부에 배치
-            ax2.text(
-                0.02, y + 0.3,
-                f"전체 평균 {y:.2f}%",
-                transform=ax2.get_yaxis_transform(),
-                ha="left",
-                va="bottom",
-                fontsize=10,
-                color="gray",
-                bbox=dict(facecolor="white", edgecolor="none", alpha=0.8, pad=2)
-            )
+            ax1.text(
+            0.02, 0.95,
+            f"전체 평균 연체율: {y:.2f}%",
+            transform=ax1.transAxes,
+            ha="left",
+            va="top",
+            fontsize=11,
+            bbox=dict(facecolor="white", edgecolor="gray", alpha=0.9)
+        )
         
         st.pyplot(fig, use_container_width=True)
 
