@@ -740,7 +740,7 @@ with tabs[0]:
         # ---- 전체 평균 기준선 ----
         overall = kpi.get("overall_dr", np.nan)
         if not np.isnan(overall):
-            ax2.axhline(overall * 100, color="gray", linestyle="--")
+            ax2.axhline(overall * 100, color="black", linestyle="--")
             ax2.text(
                 len(x)-1,
                 overall * 100,
@@ -748,7 +748,7 @@ with tabs[0]:
                 ha="right",
                 va="bottom",
                 fontsize=9,
-                color="gray"
+                color="black"
             )
         
         st.pyplot(fig, use_container_width=True)
