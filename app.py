@@ -6,10 +6,25 @@ import streamlit as st
 from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from matplotlib import font_manager
 
 # ---- 한글 설정 ----
-mpl.rcParams["axes.unicode_minus"] = False
-mpl.rcParams["font.family"] = "NanumGothic"
+def set_korean_font():
+    base_dir = Path(__file__).resolve().parent
+    font_path = base_dir / "artifacts" / "NanumGothic.ttf"
+
+    if font_path.exists():
+        font_manager.fontManager.addfont(str(font_path))
+        font_name = font_manager.FontProperties(fname=str(font_path)).get_name()
+        mpl.rcParams["font.family"] = font_name
+    else:
+        # 폰트 없으면 깨질 수 있으니 경고
+        mpl.rcParams["font.family"] = "sans-serif"
+        st.warning("한글 폰트 파일(artifacts/NanumGothic.ttf)이 없어 한글이 깨질 수 있습니다.")
+
+    mpl.rcParams["axes.unicode_minus"] = False
+
+set_korean_font()
 
 # =========================
 # 0) Excel Loader
