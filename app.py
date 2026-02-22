@@ -569,6 +569,63 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
 
     return out
 
+def _upper_from_full_industry(s: str):
+    """
+    job_ind_df의 '산업군' 값이 보통 '상위 0' 형태(예: '교육 2')라고 가정하고,
+    여기서 상위만 뽑아냄.
+    """
+    s = str(s).strip()
+    parts = s.split()
+    if len(parts) >= 2 and parts[-1].isdigit():
+        return " ".join(parts[:-1]).strip()
+    return s  # 예외 케이스는 그냥 전체를 상위로 취급
+
+
+@st.cache_data(show_spinner=False)
+def build_upper_industry_options_and_rep(job_ind_df: pd.DataFrame, sample_path: sample_scoring.csv):
+    """
+    - 선택지: sample_scoring(또는 train_data)에서 산업군_상위 unique를 가져오되,
+      무역/산업/운송은 제거
+    - 대표 매핑: 선택된 산업군_상위 -> job_ind_df에서 실제 존재하는 '산업군' 문자열(예: '교육 2')
+    """
+    # 1) 선택지 후보: sample_scoring에서 '산업군_상위'를 읽어오기
+    #    (parquet/csv 둘 다 처리)
+    if sample_path.suffix.lower() == ".parquet":
+        df_s = pd.read_parquet(sample_path)
+    else:
+        df_s = pd.read_csv(sample_path)
+
+    if "산업군_상위" not in df_s.columns:
+        raise ValueError("샘플 파일에 '산업군_상위' 컬럼이 없습니다. (train_data.csv의 컬럼명 확인 필요)")
+
+    options = (
+        df_s["산업군_상위"]
+        .dropna()
+        .astype(str)
+        .str.strip()
+        .unique()
+        .tolist()
+    )
+
+    # 2) 무역/산업/운송 제거
+    banned = {"무역", "산업", "운송"}
+    options = [x for x in options if x not in banned]
+
+    # 3) 대표 매핑(상위 -> 실제 산업군 문자열)
+    #    job_ind_df의 '산업군'에 존재하는 값들 중 같은 상위로 시작하는 첫 값을 대표로 사용
+    rep = {}
+    if "산업군" in job_ind_df.columns:
+        full_list = job_ind_df["산업군"].dropna().astype(str).tolist()
+        for full in full_list:
+            up = _upper_from_full_industry(full)
+            if up not in rep:
+                rep[up] = full
+
+    # 옵션 정렬(가독성)
+    options = sorted(options)
+
+    return options, rep
+
 # =========================
 # 4) Streamlit UI
 # =========================
@@ -673,39 +730,25 @@ with tabs[1]:
 
     left, right = st.columns([1.15, 1])
 
-    # job_ind_df에서 산업군 후보 자동 추출: "무역 0" 같은 문자열에서 상위/코드 분리
-    def _parse_industry(s: str):
-        s = str(s).strip()
-        # 예: "무역 0"
-        parts = s.split()
-        if len(parts) >= 2 and parts[-1].isdigit():
-            top = " ".join(parts[:-1])
-            code = parts[-1]
-            return top, code
-        # 예: "무역0" 같은 변형이 있으면 fallback
-        m = re.match(r"^(.*?)(\d+)$", s)
-        if m:
-            return m.group(1).strip(), m.group(2).strip()
-        return None, None
+    # ✅ 산업군(상위) 옵션: sample_scoring에서 읽고(=train에서 뽑은 샘플),
+    #    무역/산업/운송은 제외, 그리고 점수 계산용 '산업군' 문자열로 대표 매핑
+    base_dir = Path(__file__).resolve().parent
+    art_dir = base_dir / "artifacts"
 
-    ind_top_set = set()
-    ind_code_map = {}  # top -> set(codes)
-    for v in job_ind_df["산업군"].dropna().astype(str).unique():
-        top, code = _parse_industry(v)
-        if top and code:
-            ind_top_set.add(top)
-            ind_code_map.setdefault(top, set()).add(code)
+    # parquet이 없으면 csv로 바꿔도 됨
+    sample_path = art_dir / "sample_scoring.parquet"
+    if not sample_path.exists():
+        sample_path = art_dir / "sample_scoring.csv"
 
-    # 상위 산업군 목록(원하는 3개만 쓰면 여기서 필터)
-    # "무역/산업/운송"을 토글로 쓰려면 아래처럼 우선순위로 정렬
-    preferred = ["무역", "산업", "운송"]
-    ind_tops = [x for x in preferred if x in ind_top_set] + sorted([x for x in ind_top_set if x not in preferred])
+    try:
+        industry_upper_options, upper_to_rep_full = build_upper_industry_options_and_rep(job_ind_df, sample_path)
+    except Exception as e:
+        industry_upper_options, upper_to_rep_full = [], {}
+        st.warning(f"산업군(상위) 옵션을 불러오지 못했습니다: {e}")
 
-    # 상위 3개만 강제하고 싶으면(요청이 “빼고 토글”이라서 보통 3개만 보여주려는 의도):
-    # ind_tops = [x for x in preferred if x in ind_top_set]
-    # 만약 데이터에 없는 경우를 대비해 fallback:
-    if not ind_tops:
-        ind_tops = preferred
+    # 옵션이 비면 fallback(최소 동작)
+    if not industry_upper_options:
+        industry_upper_options = ["기타"]
 
     with left:
         with st.form("demo_form"):
@@ -726,18 +769,11 @@ with tabs[1]:
                 직업_ui = st.selectbox("직업", job_options_ui, index=0)
                 직업 = "Unknown" if 직업_ui == "기타" else 직업_ui
 
-                # ✅ 산업군: 상위 산업군 토글 + 코드 선택
-                산업군_상위 = st.radio("산업군(상위)", ind_tops, horizontal=True)
+                # ✅ 산업군(상위): 무역/산업/운송 제외된 리스트에서 선택
+                산업군_상위 = st.selectbox("산업군(상위)", industry_upper_options, index=0)
 
-                # 해당 상위 산업군에서 가능한 코드만 뽑아서 제공(없으면 0~9 fallback)
-                codes = sorted(ind_code_map.get(산업군_상위, set()), key=lambda x: int(x) if str(x).isdigit() else 999)
-                if not codes:
-                    codes = [str(i) for i in range(0, 10)]
-
-                산업군_코드 = st.selectbox("산업군(코드)", codes, index=0)
-
-                # 내부 저장 형태는 기존과 동일하게 "무역 0" 형태로 맞춰줌
-                산업군 = f"{산업군_상위} {산업군_코드}"
+                # ✅ 내부 점수 계산용 산업군 문자열로 대표 매핑 (예: "교육" -> "교육 2")
+                산업군 = upper_to_rep_full.get(산업군_상위, 산업군_상위)
 
                 근속연수 = st.number_input("근속연수(년)", 0.0, 50.0, 3.0, step=0.5)
 
@@ -770,8 +806,9 @@ with tabs[1]:
                 "성별": 성별,
                 "나이": float(나이),
                 "결혼 여부": 결혼,
-                "직업": 직업,         # 내부 값: "Unknown" or 실제 직업
-                "산업군": 산업군,     # 내부 값: "무역 0" 형태
+                "직업": 직업,
+                "산업군": 산업군,              # ✅ 대표 매핑된 값으로 들어감
+                "산업군_상위": 산업군_상위,    # ✅ (선택) 기록용
                 "근속연수": float(근속연수),
                 "가입연수": float(가입연수),
                 "연간 수입": float(연간수입),
@@ -807,7 +844,7 @@ with tabs[1]:
             "- High/Mid/Low 등급에 따라 선제 정책 적용\n"
             "- 아래 입력은 샘플 고객 기준 데모"
         )
-        st.caption("Tip: 산업군은 '상위 분류 + 코드' 조합으로 선택합니다. (예: 무역 0)")
+        st.caption("Tip: 산업군은 '상위 산업군'만 선택합니다. (무역/산업/운송은 제외)")
 
 
 # ---- Reason Codes
