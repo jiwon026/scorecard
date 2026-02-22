@@ -5,6 +5,11 @@ import pandas as pd
 import streamlit as st
 from pathlib import Path
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+
+# ---- 한글 설정 ----
+mpl.rcParams["axes.unicode_minus"] = False
+mpl.rcParams["font.family"] = "sans-serif"
 
 # =========================
 # 0) Excel Loader
@@ -693,44 +698,45 @@ with tabs[0]:
         # =========================
         st.markdown("### 등급별 고객 비중 & 실제 연체율 (A~E)")
 
-        if "grade_dist" in kpi and "grade_dist_n" in kpi:
+        grade_order = ["A", "B", "C", "D", "E"]
         
-            grade_order = ["A", "B", "C", "D", "E"]
+        share = [kpi["grade_dist"].get(g, 0.0) * 100 for g in grade_order]
+        dr = [kpi["dr_by_grade"].get(g, np.nan) * 100 for g in grade_order]
         
-            # 데이터 준비
-            share = [kpi["grade_dist"].get(g, 0.0) * 100 for g in grade_order]
-            dr = None
-            if "dr_by_grade" in kpi:
-                dr = [kpi["dr_by_grade"].get(g, np.nan) * 100 for g in grade_order]
+        x = np.arange(len(grade_order))
         
-            x = np.arange(len(grade_order))
+        fig, ax1 = plt.subplots(figsize=(8, 4))
         
-            fig, ax1 = plt.subplots()
+        # ---- 막대 (고객 비중) ----
+        bar_colors = ["#d62728"] + ["#4C78A8"] * 4  # A만 강조(빨강), 나머지 파랑
+        bars = ax1.bar(x, share, color=bar_colors, alpha=0.7)
         
-            # 1️⃣ 막대: 고객 비중(%)
-            bars = ax1.bar(x, share)
-            ax1.set_ylabel("고객 비중 (%)")
-            ax1.set_xticks(x)
-            ax1.set_xticklabels(grade_order)
+        ax1.set_ylabel("고객 비중 (%)")
+        ax1.set_xticks(x)
+        ax1.set_xticklabels(grade_order)
+        ax1.set_ylim(0, max(share) * 1.2)
         
-            # 2️⃣ 선: 실제 연체율(%)
-            if dr is not None:
-                ax2 = ax1.twinx()
-                ax2.plot(x, dr, marker="o")
-                ax2.set_ylabel("실제 연체율 (%)")
+        # ---- 선 (연체율) ----
+        ax2 = ax1.twinx()
+        ax2.plot(x, dr, color="#E45756", marker="o", linewidth=2)
+        ax2.set_ylabel("실제 연체율 (%)")
+        ax2.set_ylim(0, max(dr) * 1.2)
         
-                # 전체 평균 연체율 기준선
-                overall = kpi.get("overall_dr", np.nan)
-                if not np.isnan(overall):
-                    ax2.axhline(overall * 100, linestyle="--")
-                    ax2.text(
-                        0,
-                        overall * 100,
-                        f" 전체 평균 {overall*100:.2f}%",
-                        va="bottom"
-                    )
+        # ---- 전체 평균 기준선 ----
+        overall = kpi.get("overall_dr", np.nan)
+        if not np.isnan(overall):
+            ax2.axhline(overall * 100, color="gray", linestyle="--")
+            ax2.text(
+                len(x)-1,
+                overall * 100,
+                f" 전체 평균 {overall*100:.2f}%",
+                ha="right",
+                va="bottom",
+                fontsize=9,
+                color="gray"
+            )
         
-            st.pyplot(fig, use_container_width=True)
+        st.pyplot(fig, use_container_width=True)
 
     except Exception as e:
         st.warning(f"샘플 KPI를 계산하지 못했습니다: {e}")
