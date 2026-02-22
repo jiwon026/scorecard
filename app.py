@@ -34,7 +34,11 @@ def load_scorecard_excel(_version: str = "v1"):
     cross = xls.parse("scorecard_cross")     # feature/points (섹션형)
 
     binary = xls.parse("scorecard_binary")   # feature/value/points (섹션+행)
-    flag   = xls.parse("scorecard_flag")     # feature/value/points (섹션+행)
+    flag = safe_parse(
+        xls,
+        ["scorecard_flag", "flag", "flags", "scorecard_flags"],
+        required=False
+    )
     job_ind = xls.parse("job_ind_points")    # 직업/산업군/points
 
     # meta에 유용 정보 추가
