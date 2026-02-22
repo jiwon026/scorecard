@@ -673,6 +673,40 @@ with tabs[1]:
 
     left, right = st.columns([1.15, 1])
 
+    # job_ind_df에서 산업군 후보 자동 추출: "무역 0" 같은 문자열에서 상위/코드 분리
+    def _parse_industry(s: str):
+        s = str(s).strip()
+        # 예: "무역 0"
+        parts = s.split()
+        if len(parts) >= 2 and parts[-1].isdigit():
+            top = " ".join(parts[:-1])
+            code = parts[-1]
+            return top, code
+        # 예: "무역0" 같은 변형이 있으면 fallback
+        m = re.match(r"^(.*?)(\d+)$", s)
+        if m:
+            return m.group(1).strip(), m.group(2).strip()
+        return None, None
+
+    ind_top_set = set()
+    ind_code_map = {}  # top -> set(codes)
+    for v in job_ind_df["산업군"].dropna().astype(str).unique():
+        top, code = _parse_industry(v)
+        if top and code:
+            ind_top_set.add(top)
+            ind_code_map.setdefault(top, set()).add(code)
+
+    # 상위 산업군 목록(원하는 3개만 쓰면 여기서 필터)
+    # "무역/산업/운송"을 토글로 쓰려면 아래처럼 우선순위로 정렬
+    preferred = ["무역", "산업", "운송"]
+    ind_tops = [x for x in preferred if x in ind_top_set] + sorted([x for x in ind_top_set if x not in preferred])
+
+    # 상위 3개만 강제하고 싶으면(요청이 “빼고 토글”이라서 보통 3개만 보여주려는 의도):
+    # ind_tops = [x for x in preferred if x in ind_top_set]
+    # 만약 데이터에 없는 경우를 대비해 fallback:
+    if not ind_tops:
+        ind_tops = preferred
+
     with left:
         with st.form("demo_form"):
             c1, c2, c3 = st.columns(3)
@@ -683,12 +717,28 @@ with tabs[1]:
                 결혼 = st.selectbox("결혼 여부", ["미혼", "기혼", "별거", "사별", "사실혼"])
 
             with c2:
-                직업 = st.selectbox("직업", [
-                    "Unknown","단순 노동자","영업직","핵심 노동자","관리직","운전자","기술직","회계사",
+                # ✅ 직업: UI에서는 "기타"로 보이게, 내부 값은 "Unknown"
+                job_options_ui = [
+                    "기타", "단순 노동자","영업직","핵심 노동자","관리직","운전자","기술직","회계사",
                     "의료 업계 종사자","보안 업계 종사자","조리사","미화원","가정부","저임금 노동자",
                     "비서","요식업 종사자","부동산중개업자","인사 담당자","IT 업계 종사자"
-                ])
-                산업군 = st.text_input("산업군 (예: 무역 0, 산업 3, 운송 1 등)", value="무역 0")
+                ]
+                직업_ui = st.selectbox("직업", job_options_ui, index=0)
+                직업 = "Unknown" if 직업_ui == "기타" else 직업_ui
+
+                # ✅ 산업군: 상위 산업군 토글 + 코드 선택
+                산업군_상위 = st.radio("산업군(상위)", ind_tops, horizontal=True)
+
+                # 해당 상위 산업군에서 가능한 코드만 뽑아서 제공(없으면 0~9 fallback)
+                codes = sorted(ind_code_map.get(산업군_상위, set()), key=lambda x: int(x) if str(x).isdigit() else 999)
+                if not codes:
+                    codes = [str(i) for i in range(0, 10)]
+
+                산업군_코드 = st.selectbox("산업군(코드)", codes, index=0)
+
+                # 내부 저장 형태는 기존과 동일하게 "무역 0" 형태로 맞춰줌
+                산업군 = f"{산업군_상위} {산업군_코드}"
+
                 근속연수 = st.number_input("근속연수(년)", 0.0, 50.0, 3.0, step=0.5)
 
             with c3:
@@ -720,8 +770,8 @@ with tabs[1]:
                 "성별": 성별,
                 "나이": float(나이),
                 "결혼 여부": 결혼,
-                "직업": 직업,
-                "산업군": 산업군,
+                "직업": 직업,         # 내부 값: "Unknown" or 실제 직업
+                "산업군": 산업군,     # 내부 값: "무역 0" 형태
                 "근속연수": float(근속연수),
                 "가입연수": float(가입연수),
                 "연간 수입": float(연간수입),
@@ -753,11 +803,11 @@ with tabs[1]:
     with right:
         st.markdown("### 입력 가이드(발표 스토리)")
         st.write(
-            "- 본 스코어카드는 월 1회(또는 분기 1회) 최신 고객 데이터로 재학습/검증된다고 가정\n"
-            "- 신규/변경 고객 기본정보로 연체 위험을 조기 탐지\n"
-            "- 등급별 선제 정책(High/Mid/Low) 적용\n"
-            "- 아래 입력은 ‘가장 최근 모델’ 기준 데모"
+            "- 신규/변경 고객의 기본정보로 연체 위험을 조기 탐지\n"
+            "- High/Mid/Low 등급에 따라 선제 정책 적용\n"
+            "- 아래 입력은 샘플 고객 기준 데모"
         )
+        st.caption("Tip: 산업군은 '상위 분류 + 코드' 조합으로 선택합니다. (예: 무역 0)")
 
 
 # ---- Reason Codes
