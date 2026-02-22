@@ -529,43 +529,48 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
         _, p = score_one_fast(r, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map)
         probas[i] = p
 
-    # Cut: Top20% = High, Top60% = Mid 이상
-    high_cut = float(np.quantile(probas, 0.80))
-    mid_cut  = float(np.quantile(probas, 0.40))
+    n = int(len(df))
+    avg_pd = float(np.mean(probas)) if n > 0 else np.nan
 
-    grade = np.where(probas >= high_cut, "High",
-             np.where(probas >= mid_cut, "Mid", "Low"))
+    # 5등급(A~E): 분위수 기준 (A가 가장 위험)
+    q90 = float(np.quantile(probas, 0.90))
+    q70 = float(np.quantile(probas, 0.70))
+    q40 = float(np.quantile(probas, 0.40))
+    q15 = float(np.quantile(probas, 0.15))
+
+    grade5 = np.where(probas >= q90, "A",
+              np.where(probas >= q70, "B",
+              np.where(probas >= q40, "C",
+              np.where(probas >= q15, "D", "E"))))
+
+    grade_order = ["A", "B", "C", "D", "E"]
+    dist = {g: float(np.mean(grade5 == g)) for g in grade_order}  # 비율
+    dist_n = {g: int(np.sum(grade5 == g)) for g in grade_order}   # 명수
+
+    # 고위험군: A+B (상위 30%)로 정의(원하면 A만(10%)으로 바꿀 수 있음)
+    high_mask = np.isin(grade5, ["A", "B"])
+    high_share = float(np.mean(high_mask))
+    high_avg_pd = float(np.mean(probas[high_mask])) if high_mask.any() else np.nan
 
     out = {
-        "n": int(len(df)),
-        "high_cut": high_cut,
-        "mid_cut": mid_cut,
-        "high_share": float((grade == "High").mean()),
-        "mid_share": float((grade == "Mid").mean()),
-        "low_share": float((grade == "Low").mean()),
+        "n": n,
+        "avg_pd": avg_pd,
+        "high_share": high_share,
+        "high_avg_pd": high_avg_pd,
+        "grade_dist": dist,
+        "grade_dist_n": dist_n,
+        "cuts": {"A": q90, "B": q70, "C": q40, "D": q15},
     }
 
-    # TARGET이 있으면 “사업 KPI(연체율/포착률)”까지 계산
+    # TARGET 있으면 등급별 실제 연체율도 같이
     if "TARGET" in df.columns:
         y = df["TARGET"].astype(int).values
-        high_mask = (grade == "High")
-        low_mask  = (grade == "Low")
-
-        overall_dr = y.mean()
-        high_dr = y[high_mask].mean() if high_mask.any() else np.nan
-        low_dr  = y[low_mask].mean()  if low_mask.any()  else np.nan
-
-        total_bad = (y == 1).sum()
-        bad_capture_high = (y[high_mask] == 1).sum() / total_bad if total_bad > 0 else np.nan
-        risk_gap = (high_dr / low_dr) if (not np.isnan(high_dr) and not np.isnan(low_dr) and low_dr > 0) else np.nan
-
-        out.update({
-            "overall_dr": float(overall_dr),
-            "high_dr": float(high_dr),
-            "low_dr": float(low_dr),
-            "bad_capture_high": float(bad_capture_high),
-            "risk_gap": float(risk_gap) if not np.isnan(risk_gap) else np.nan,
-        })
+        dr_by_grade = {}
+        for g in grade_order:
+            m = (grade5 == g)
+            dr_by_grade[g] = float(y[m].mean()) if m.any() else np.nan
+        out["dr_by_grade"] = dr_by_grade
+        out["overall_dr"] = float(y.mean())
 
     return out
 
@@ -642,18 +647,21 @@ tabs = st.tabs([
 with tabs[0]:
     st.subheader("Executive Summary")
     st.info(
-        "이 대시보드는 고객의 기본 정보만으로 연체 위험을 사전에 예측하고, "
-        "위험 수준별(High/Mid/Low)로 구분하여 선제적인 관리 전략을 실행할 수 있도록 지원하는 의사결정 도구입니다. "
-        "예측 결과는 한도 조정, 모니터링 강화, 우량고객 유지 전략 등 실제 운영 정책으로 바로 연결됩니다."
+        "이 대시보드는 고객의 기본 정보만으로 연체 위험(PD)을 사전에 예측하고, "
+        "위험 수준별 등급(A~E)으로 구분하여 선제적인 관리 전략을 실행할 수 있도록 지원하는 의사결정 도구입니다. "
+        "결과는 한도 조정, 모니터링 강화, 우량고객 유지 전략 등 실제 운영 정책으로 바로 연결됩니다."
     )
 
     # =========================
-    # 1) 경영진용 핵심 KPI (Sample 기반)
+    # 1) Sample 기반 KPI 산출
     # =========================
-    st.markdown("### 📊 Risk Distribution & Business Impact (Sample 기반)")
-
     base_dir = Path(__file__).resolve().parent
     art_dir = base_dir / "artifacts"
+
+    # 샘플 파일 우선순위: parquet -> csv
+    sample_path = art_dir / "sample_scoring.parquet"
+    if not sample_path.exists():
+        sample_path = art_dir / "sample_scoring.csv"
 
     try:
         sample_df = load_sample_df(art_dir)
@@ -661,57 +669,82 @@ with tabs[0]:
             sample_df, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map
         )
 
+        st.markdown("### 📊 Main Dashboard (Risk Snapshot)")
+
+        # ---- KPI 4개 (추천)
         k1, k2, k3, k4 = st.columns(4)
-        k1.metric("High Risk 고객 비중", f"{kpi['high_share']*100:.1f}%")
+        k1.metric("전체 고객 수", f"{kpi['n']:,}")
+        # 전체 평균 PD (없으면 계산)
+        avg_pd = kpi.get("avg_pd", None)
+        if avg_pd is None:
+            # 구버전 함수 대비: 없으면 대략 계산(grade만 있던 경우)
+            # compute_portfolio_kpis_from_df를 최신 버전으로 업데이트하면 이 부분은 자동으로 채워짐
+            avg_pd = np.nan
+        k2.metric("전체 평균 PD", f"{avg_pd*100:.2f}%" if not np.isnan(avg_pd) else "-")
 
-        # 샘플에 TARGET이 있으면 사업 KPI까지 보여줌
-        if "high_dr" in kpi:
-            k2.metric("High 고객 연체율", f"{kpi['high_dr']*100:.2f}%")
-            k3.metric("Low 고객 연체율",  f"{kpi['low_dr']*100:.2f}%")
-            k4.metric("연체자 High 포착률", f"{kpi['bad_capture_high']*100:.1f}%")
+        # 고위험군 정의: A+B(상위 30%)를 추천. (너희 정책에 맞게 A만(10%)도 가능)
+        high_share = kpi.get("high_share", None)
+        high_avg_pd = kpi.get("high_avg_pd", None)
+        k3.metric("고위험군 비율", f"{high_share*100:.1f}%" if high_share is not None else "-")
+        k4.metric("고위험군 평균 PD", f"{high_avg_pd*100:.2f}%" if high_avg_pd is not None and not np.isnan(high_avg_pd) else "-")
+
+        st.caption("※ 위 KPI는 전체 데이터가 아닌 샘플(랜덤 추출) 기준으로 산출되었습니다.")
+
+        # =========================
+        # 2) 등급별 분포 (A~E)
+        # =========================
+        st.markdown("### 등급별 분포 (A~E)")
+
+        # compute_portfolio_kpis_from_df 최신 버전은 grade_dist/grade_dist_n을 반환한다고 가정
+        grade_order = ["A", "B", "C", "D", "E"]
+        if "grade_dist" in kpi and "grade_dist_n" in kpi:
+            dist_df = pd.DataFrame({
+                "등급": grade_order,
+                "고객수": [kpi["grade_dist_n"].get(g, 0) for g in grade_order],
+                "비중": [kpi["grade_dist"].get(g, 0.0) for g in grade_order],
+            })
+            dist_df["비중(%)"] = (dist_df["비중"] * 100).round(1)
+            dist_df = dist_df.drop(columns=["비중"])
+
+            st.dataframe(dist_df, use_container_width=True)
+
+            # TARGET 있으면 등급별 실제 연체율까지(경영진 설득력↑)
+            if "dr_by_grade" in kpi:
+                st.markdown("### 등급별 실제 연체율 (샘플 기준)")
+                dr_df = pd.DataFrame({
+                    "등급": grade_order,
+                    "연체율(%)": [round(kpi["dr_by_grade"].get(g, np.nan) * 100, 2) for g in grade_order],
+                })
+                st.dataframe(dr_df, use_container_width=True)
+                st.caption(f"전체 연체율(샘플): {kpi.get('overall_dr', np.nan)*100:.2f}%")
+
         else:
-            k2.metric("Mid 고객 비중", f"{kpi['mid_share']*100:.1f}%")
-            k3.metric("Low 고객 비중", f"{kpi['low_share']*100:.1f}%")
-            k4.metric("샘플 수", f"{kpi['n']:,}")
-
-        # Cut 값은 참고용으로 작게
-        cap = (
-            f"Cut(참고용) | High(Top20%): {kpi['high_cut']:.4f} | "
-            f"Mid(Top60%): {kpi['mid_cut']:.4f} | n={kpi['n']:,}"
-        )
-        if "overall_dr" in kpi:
-            cap += f" | 전체 연체율: {kpi['overall_dr']*100:.2f}%"
-            rg = kpi.get("risk_gap", np.nan)
-            if not np.isnan(rg):
-                cap += f" | High/Low 위험도 격차: {rg:.1f}x"
-        st.caption(cap)
+            st.info("등급(A~E) 분포를 표시하려면 compute_portfolio_kpis_from_df를 A~E 버전으로 업데이트해 주세요.")
 
     except Exception as e:
         st.warning(f"샘플 KPI를 계산하지 못했습니다: {e}")
-    st.caption("※ 아래 KPI는 데이터 전체가 아닌 샘플(랜덤 n=2,000) 기준으로 산출되었습니다.")
 
     # =========================
-    # 2) 모델 성능 지표는 '보조'로만 (작게)
+    # 3) 성능지표는 보조로만(작게)
     # =========================
     st.caption("Model Performance (Validation) | AUC: 0.645  |  KS: 0.215  |  Gini: 0.29")
 
     # =========================
-    # 3) 운영 정책 예시
+    # 4) 운영 정책 예시
     # =========================
     st.divider()
     st.markdown("### 🎯 운영 정책 예시 (Risk Grade Action)")
 
     a, b, c = st.columns(3)
     with a:
-        st.markdown("#### 🔴 High")
+        st.markdown("#### 🔴 High (예: A~B)")
         st.markdown("- 한도/결제조건 조정\n- 사전 안내·콜센터\n- 연체예방 캠페인/리마인드")
     with b:
-        st.markdown("#### 🟠 Mid")
+        st.markdown("#### 🟠 Mid (예: C)")
         st.markdown("- 모니터링 강화\n- 자동이체/분할납부 유도\n- 행동기반 알림")
     with c:
-        st.markdown("#### 🟢 Low")
+        st.markdown("#### 🟢 Low (예: D~E)")
         st.markdown("- 정상 유지\n- 우량 고객 프로모션\n- 과도 제약 최소화")
-
 
 # ---- Demo input
 with tabs[1]:
