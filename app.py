@@ -80,18 +80,20 @@ def add_job_ksco_7(df: pd.DataFrame) -> pd.DataFrame:
 # Load artifacts
 # =========================
 @st.cache_resource
-def load_artifacts(_version="v2"):
-    base = Path(__file__).resolve().parent
-    art_dir = base / "artifacts"
+def load_artifacts(_version="v4"):
+    BASE_DIR = Path(__file__).resolve().parent
+    ART_DIR = BASE_DIR / "artifacts"
 
-    with open(art_dir / "model.pkl", "rb") as f:
+    with open(ART_DIR / "model.pkl", "rb") as f:
         pipe = pickle.load(f)
 
-    with open(art_dir / "meta.pkl", "rb") as f:
+    with open(ART_DIR / "meta.pkl", "rb") as f:
         meta = pickle.load(f)
 
-    combo_woe_table = pd.read_parquet(art_dir / "combo_woe_table.parquet")
-    return pipe, meta, combo_woe_table
+    combo_woe_table = pd.read_parquet(ART_DIR / "combo_woe_table.parquet")
+    sample_df = pd.read_parquet(ART_DIR / "sample_scoring.parquet")
+
+    return pipe, meta, combo_woe_table, sample_df
 
 def ensure_feature_columns(df_one: pd.DataFrame, meta: dict):
     df = df_one.copy()
@@ -194,7 +196,8 @@ def top_reason_codes(pipe, X_row: pd.DataFrame, top_k=7):
 # =========================
 st.set_page_config(page_title="CardScore | Delinquency Risk Dashboard", layout="wide")
 
-pipe, meta, combo_woe_table = load_artifacts("v2")
+pipe, meta, combo_woe_table, sample_df = load_artifacts("v4")
+
 df_or, or_high, or_low = get_or_table(pipe, top_k=15)
 
 st.title("CardScore — 연체 리스크 예측 & 선제적 관리 대시보드")
@@ -256,34 +259,43 @@ with tabs[0]:
 # ② Score Customers
 # =========================
 with tabs[1]:
-    st.subheader("고객 점수화 (CSV 업로드 → 예측확률/등급 → 다운로드)")
-    up = st.file_uploader("CSV 업로드 (TARGET 없어도 됨)", type=["csv"])
+    st.subheader("고객 점수화")
 
-    st.caption("※ 업로드 파일은 훈련에 사용한 컬럼 구조(예: 직업, 산업군 등)를 포함해야 합니다.")
+    mode = st.radio(
+        "점수화 방식 선택",
+        ["✅ 샘플 고객(랜덤) 점수화", "📤 CSV 업로드 점수화"],
+        horizontal=True
+    )
 
-    if up is None:
-        st.warning("CSV를 업로드하면 결과(확률/등급/요약)가 표시됩니다.")
-    else:
-        df_new = pd.read_csv(up)
-        
-        df_new = ensure_feature_columns(df_new, meta)
+    if mode == "✅ 샘플 고객(랜덤) 점수화":
+        st.caption("훈련 데이터에서 랜덤으로 추출한 고객 샘플에 대해 자동 스코어링을 수행합니다.")
+
+        c1, c2 = st.columns(2)
+        with c1:
+            n = st.slider("샘플 수", 200, min(2000, len(sample_df)), 1000, step=100)
+        with c2:
+            seed = st.number_input("Seed (재현성)", value=42, step=1)
+
+        df_new = sample_df.sample(n=int(n), random_state=int(seed)).copy()
+
+        # ✅ 여기서 score()가 내부에서 align_to_feature_cols까지 해주는 구조면 ensure 불필요
+        # 혹시 score() 밖에서 ensure를 쓰고 있다면 아래 한 줄 유지
+        # df_new = ensure_feature_columns(df_new, meta)
+
         proba, grade_vec, df2 = score(df_new, pipe, meta)
         out = df_new.copy()
         out["pred_prob"] = proba
         out["risk_grade"] = grade_vec
 
-        # store for Explain tab
         st.session_state["last_out"] = out.reset_index(drop=True)
         st.session_state["last_df2"] = df2.reset_index(drop=True)
 
-        # Summary cards
         s1, s2, s3, s4 = st.columns(4)
         s1.metric("Rows", f"{len(out):,}")
         s2.metric("High", f"{(out['risk_grade']=='High').sum():,}")
         s3.metric("Mid", f"{(out['risk_grade']=='Mid').sum():,}")
         s4.metric("Low", f"{(out['risk_grade']=='Low').sum():,}")
 
-        # charts
         left, right = st.columns([1.2, 1])
         with left:
             fig = px.histogram(out, x="pred_prob", nbins=40, title="Predicted Probability Distribution")
@@ -300,14 +312,28 @@ with tabs[1]:
         st.markdown("### Scoring Results (상위 200행 미리보기)")
         st.dataframe(out.head(200), use_container_width=True)
 
-        # download
         csv_bytes = out.to_csv(index=False).encode("utf-8-sig")
-        st.download_button(
-            "⬇️ 결과 다운로드 (CSV)",
-            data=csv_bytes,
-            file_name="scoring_results.csv",
-            mime="text/csv"
-        )
+        st.download_button("⬇️ 결과 다운로드 (CSV)", data=csv_bytes, file_name="sample_scoring_results.csv", mime="text/csv")
+
+    else:
+        st.subheader("CSV 업로드 → 예측확률/등급 → 다운로드")
+        up = st.file_uploader("CSV 업로드 (TARGET 없어도 됨)", type=["csv"])
+        st.caption("※ 업로드 파일은 훈련에 사용한 컬럼 구조(예: 직업, 산업군 등)를 포함해야 합니다.")
+
+        if up is None:
+            st.warning("CSV를 업로드하면 결과(확률/등급/요약)가 표시됩니다.")
+        else:
+            df_new = pd.read_csv(up)
+
+            # df_new = ensure_feature_columns(df_new, meta)  # 필요 시
+            proba, grade_vec, df2 = score(df_new, pipe, meta)
+
+            out = df_new.copy()
+            out["pred_prob"] = proba
+            out["risk_grade"] = grade_vec
+
+            st.session_state["last_out"] = out.reset_index(drop=True)
+            st.session_state["last_df2"] = df2.reset_index(drop=True)
 
 
 # =========================
