@@ -691,39 +691,46 @@ with tabs[0]:
         # =========================
         # 2) 등급별 분포 (A~E)
         # =========================
-        st.markdown("### 등급별 분포 (A~E)")
-        if "grade_dist_n" in kpi and "grade_dist" in kpi:
-            grade_order = ["A", "B", "C", "D", "E"]
-            dist_df = pd.DataFrame({
-                "등급": grade_order,
-                "고객수": [kpi["grade_dist_n"].get(g, 0) for g in grade_order],
-                "비중(%)": [round(kpi["grade_dist"].get(g, 0.0) * 100, 1) for g in grade_order],
-            })
+        st.markdown("### 등급별 고객 비중 & 실제 연체율 (A~E)")
+
+        if "grade_dist" in kpi and "grade_dist_n" in kpi:
         
-            # ✅ 가로 막대: 비중(%) 기준
-            st.bar_chart(dist_df.set_index("등급")["비중(%)"])
-
-            # TARGET 있으면 등급별 실제 연체율까지(경영진 설득력↑)
-            import matplotlib.pyplot as plt
-
+            grade_order = ["A", "B", "C", "D", "E"]
+        
+            # 데이터 준비
+            share = [kpi["grade_dist"].get(g, 0.0) * 100 for g in grade_order]
+            dr = None
             if "dr_by_grade" in kpi:
-                st.markdown("### 등급별 실제 연체율 (샘플 기준)")
-            
-                grade_order = ["A", "B", "C", "D", "E"]
                 dr = [kpi["dr_by_grade"].get(g, np.nan) * 100 for g in grade_order]
-                overall = kpi.get("overall_dr", np.nan) * 100
-            
-                fig, ax = plt.subplots()
-                ax.bar(grade_order, dr)
+        
+            x = np.arange(len(grade_order))
+        
+            fig, ax1 = plt.subplots()
+        
+            # 1️⃣ 막대: 고객 비중(%)
+            bars = ax1.bar(x, share)
+            ax1.set_ylabel("고객 비중 (%)")
+            ax1.set_xticks(x)
+            ax1.set_xticklabels(grade_order)
+        
+            # 2️⃣ 선: 실제 연체율(%)
+            if dr is not None:
+                ax2 = ax1.twinx()
+                ax2.plot(x, dr, marker="o")
+                ax2.set_ylabel("실제 연체율 (%)")
+        
+                # 전체 평균 연체율 기준선
+                overall = kpi.get("overall_dr", np.nan)
                 if not np.isnan(overall):
-                    ax.axhline(overall, linestyle="--")
-                    ax.text(0.02, overall, f" 전체 평균 {overall:.2f}%", va="bottom")
-            
-                ax.set_ylabel("연체율(%)")
-                st.pyplot(fig, use_container_width=True)
-
-        else:
-            st.info("등급(A~E) 분포를 표시하려면 compute_portfolio_kpis_from_df를 A~E 버전으로 업데이트해 주세요.")
+                    ax2.axhline(overall * 100, linestyle="--")
+                    ax2.text(
+                        0,
+                        overall * 100,
+                        f" 전체 평균 {overall*100:.2f}%",
+                        va="bottom"
+                    )
+        
+            st.pyplot(fig, use_container_width=True)
 
     except Exception as e:
         st.warning(f"샘플 KPI를 계산하지 못했습니다: {e}")
