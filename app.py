@@ -562,23 +562,21 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
                                   flag_map,
                                   job_ind_map):
     df = df.copy()
-
-    # 0) 빈 문자열/공백 처리
     df = df.replace({"": np.nan, " ": np.nan})
 
-    # 1) 숫자 컬럼 강제 변환(있으면)
-    num_cols = ["나이", "근속연수", "가입연수", "연간 수입", "거주지 인구 비율", "가족 구성원 수", "자녀 수"]
+    # 숫자 컬럼 정리
+    num_cols = ["나이","근속연수","가입연수","연간 수입","거주지 인구 비율","가족 구성원 수","자녀 수"]
     for c in num_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    # 2) binary 컬럼(있으면)
-    bin_cols = ["차량 소유 여부", "부동산 소유 여부", "배우자유무"]
+    # binary 컬럼 정리
+    bin_cols = ["차량 소유 여부","부동산 소유 여부","배우자유무"]
     for c in bin_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)
 
-    # 3) 확률 산출
+    # --- proba 산출
     records = df.to_dict("records")
     probas = np.empty(len(records), dtype=float)
 
@@ -586,43 +584,61 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
         _, p = score_one_fast(r, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map)
         probas[i] = p
 
-    # 4) Cut: Top20% = High, Top60% = Mid 이상 (기존 로직 유지)
-    high_cut = float(np.quantile(probas, 0.80))
-    mid_cut  = float(np.quantile(probas, 0.40))
+    # --- 등급(A~E) 만들기: PD 높은 쪽이 A(리스크 높음)
+    #     5분위 cut: 상위 20% = A, 다음 20% = B ...
+    q80, q60, q40, q20 = np.quantile(probas, [0.80, 0.60, 0.40, 0.20])
 
-    grade = np.where(probas >= high_cut, "High",
+    grade5 = np.where(probas >= q80, "A",
+              np.where(probas >= q60, "B",
+              np.where(probas >= q40, "C",
+              np.where(probas >= q20, "D", "E"))))
+
+    # --- High/Mid/Low도 유지(기존 로직과 호환)
+    high_cut = float(q80)              # Top20%
+    mid_cut  = float(np.quantile(probas, 0.40))  # Top60% 기준(=40% quantile)
+    grade3 = np.where(probas >= high_cut, "High",
              np.where(probas >= mid_cut, "Mid", "Low"))
 
     out = {
         "n": int(len(df)),
-        "high_cut": high_cut,
-        "mid_cut": mid_cut,
-        "high_share": float((grade == "High").mean()),
-        "mid_share": float((grade == "Mid").mean()),
-        "low_share": float((grade == "Low").mean()),
+        "overall_pd": float(np.mean(probas)),
+        "high_cut": float(high_cut),
+        "mid_cut": float(mid_cut),
+        "high_share": float((grade3 == "High").mean()),
+        "mid_share": float((grade3 == "Mid").mean()),
+        "low_share": float((grade3 == "Low").mean()),
+        "high_pd": float(np.mean(probas[grade3 == "High"])) if np.any(grade3 == "High") else np.nan,
     }
 
-    # 5) TARGET 있으면 KPI(연체율/포착률) 계산
+    # --- Overview에서 쓰는 key: grade_dist (A~E 분포)
+    order = ["A","B","C","D","E"]
+    cnt = pd.Series(grade5).value_counts().reindex(order, fill_value=0)
+    dist_df = pd.DataFrame({
+        "grade": cnt.index,
+        "count": cnt.values,
+        "share": (cnt.values / len(df) * 100.0)
+    })
+    out["grade_dist"] = dist_df
+
+    # --- TARGET 있으면 등급별 실제 연체율도 같이 만들어줌(그래프용)
     if "TARGET" in df.columns:
         y = pd.to_numeric(df["TARGET"], errors="coerce").fillna(0).astype(int).values
-        high_mask = (grade == "High")
-        low_mask  = (grade == "Low")
-
         overall_dr = float(y.mean()) if len(y) else np.nan
-        high_dr = float(y[high_mask].mean()) if high_mask.any() else np.nan
-        low_dr  = float(y[low_mask].mean())  if low_mask.any()  else np.nan
+        out["overall_dr"] = overall_dr
 
-        total_bad = int((y == 1).sum())
-        bad_capture_high = float((y[high_mask] == 1).sum() / total_bad) if total_bad > 0 else np.nan
-        risk_gap = float(high_dr / low_dr) if (not np.isnan(high_dr) and not np.isnan(low_dr) and low_dr > 0) else np.nan
+        dr_by = []
+        for g in order:
+            m = (grade5 == g)
+            dr = float(y[m].mean()) if np.any(m) else np.nan
+            dr_by.append(dr * 100.0 if not np.isnan(dr) else np.nan)
 
-        out.update({
-            "overall_dr": overall_dr,
-            "high_dr": high_dr,
-            "low_dr": low_dr,
-            "bad_capture_high": bad_capture_high,
-            "risk_gap": risk_gap,
+        out["grade_dr"] = pd.DataFrame({
+            "grade": order,
+            "dr": dr_by
         })
+    else:
+        out["overall_dr"] = np.nan
+        out["grade_dr"] = pd.DataFrame({"grade": ["A","B","C","D","E"], "dr": [np.nan]*5})
 
     return out
 
