@@ -929,4 +929,3 @@ with tabs[2]:
 
 
 st.divider()
-st.caption("발표 흐름 추천: ①Overview(정책+설명가능) → ②데모(입력→등급) → ③Reason Codes(왜 High인지) → ④Insights(직업×산업군 점수 테이블).")
