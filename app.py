@@ -1105,32 +1105,32 @@ with tabs[1]:
             st.session_state["last_result"] = (score, proba, grade)
 
     with right:
-    st.markdown("### 결과")
-
-    if "last_result" not in st.session_state:
-        st.info("좌측에서 고객 정보를 입력하고 ‘등급 산출’을 눌러주세요.")
-    else:
-        score, proba, grade = st.session_state["last_result"]
-        bg, border, text = grade_color(grade)
-
-        # ✅ Score / PD / Grade 카드
-        st.markdown(metric_card("Score", f"{score:.1f}", bg, border, text, sub="점수카드 합산 결과"), unsafe_allow_html=True)
-        st.markdown(metric_card("연체확률 (PD)", f"{proba:.3f}", bg, border, text, sub="점수 → 확률 변환 결과"), unsafe_allow_html=True)
-        st.markdown(metric_card("등급", grade, bg, border, text, sub="점수컷 기준(우대/안정/위험/고위험)"), unsafe_allow_html=True)
-
-        st.progress(min(max(proba, 0.0), 1.0))
-
-        # ✅ 등급별 정책(맞춤 강조)
-        st.markdown("### 🎯 권장 운영 액션")
-        title, items, box = policy_reco_by_grade(grade)
-        msg = "\n".join([f"- {x}" for x in items])
-
-        if box == "error":
-            st.error(f"**{title}**\n\n{msg}")
-        elif box == "warning":
-            st.warning(f"**{title}**\n\n{msg}")
+        st.markdown("### 결과")
+    
+        if "last_result" not in st.session_state:
+            st.info("좌측에서 고객 정보를 입력하고 ‘등급 산출’을 눌러주세요.")
         else:
-            st.success(f"**{title}**\n\n{msg}")
+            score, proba, grade = st.session_state["last_result"]
+            bg, border, text = grade_color(grade)
+    
+            # ✅ Score / PD / Grade 카드
+            st.markdown(metric_card("Score", f"{score:.1f}", bg, border, text, sub="점수카드 합산 결과"), unsafe_allow_html=True)
+            st.markdown(metric_card("연체확률 (PD)", f"{proba:.3f}", bg, border, text, sub="점수 → 확률 변환 결과"), unsafe_allow_html=True)
+            st.markdown(metric_card("등급", grade, bg, border, text, sub="점수컷 기준(우대/안정/위험/고위험)"), unsafe_allow_html=True)
+    
+            st.progress(min(max(proba, 0.0), 1.0))
+    
+            # ✅ 등급별 정책(맞춤 강조)
+            st.markdown("### 🎯 권장 운영 액션")
+            title, items, box = policy_reco_by_grade(grade)
+            msg = "\n".join([f"- {x}" for x in items])
+    
+            if box == "error":
+                st.error(f"**{title}**\n\n{msg}")
+            elif box == "warning":
+                st.warning(f"**{title}**\n\n{msg}")
+            else:
+                st.success(f"**{title}**\n\n{msg}")
 
     # =========================
     # Explain: 같은 탭 아래에 바로 표시
