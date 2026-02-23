@@ -1073,29 +1073,77 @@ with tabs[4]:
     # 3) 시각화 (선택)
     # -------------------------
     st.markdown("### 시각화")
-    # 간단하게: 평균PD 막대 / (있으면) 실제연체율 선
-    import matplotlib.pyplot as plt
-    import numpy as np
-
+    
     labels = show["SEG"].astype(str).tolist()
     pd_vals = show["평균PD(%)"].values
-
+    
     fig, ax1 = plt.subplots(figsize=(9, 4))
-    ax1.bar(np.arange(len(labels)), pd_vals)
-    ax1.set_xticks(np.arange(len(labels)))
+    
+    x = np.arange(len(labels))
+    
+    # -------------------------
+    # 1️⃣ 평균 PD (막대) - 파랑
+    # -------------------------
+    bars = ax1.bar(
+        x,
+        pd_vals,
+        color="#4C78A8",
+        alpha=0.75,
+        label="평균 PD (%)"
+    )
+    
+    ax1.set_xticks(x)
     ax1.set_xticklabels(labels, rotation=20, ha="right")
     ax1.set_ylabel("평균 PD (%)")
-
+    
+    # -------------------------
+    # 2️⃣ 실제 연체율 (선) - 빨강
+    # -------------------------
     if has_target:
         dr_vals = show["실제연체율(%)"].values
+    
         ax2 = ax1.twinx()
-        ax2.plot(np.arange(len(labels)), dr_vals, marker="o")
+        line = ax2.plot(
+            x,
+            dr_vals,
+            marker="o",
+            linewidth=2.5,
+            color="#E45756",
+            label="실제 연체율 (%)"
+        )
+    
         ax2.set_ylabel("실제 연체율 (%)")
-
-        # 전체 연체율 기준선
-        ax2.axhline(overall_dr * 100, linestyle="--")
-        ax2.text(0, overall_dr * 100, f"전체 {overall_dr*100:.2f}%", va="bottom")
-
+    
+        # -------------------------
+        # 3️⃣ 전체 평균 기준선 - 회색 점선
+        # -------------------------
+        ax2.axhline(
+            overall_dr * 100,
+            linestyle="--",
+            linewidth=1.5,
+            color="gray",
+            label="전체 평균 연체율"
+        )
+    
+        # 기준선 라벨(왼쪽 상단 박스)
+        ax1.text(
+            0.02,
+            0.95,
+            f"전체 평균 연체율: {overall_dr*100:.2f}%",
+            transform=ax1.transAxes,
+            ha="left",
+            va="top",
+            fontsize=10,
+            bbox=dict(facecolor="white", edgecolor="gray", alpha=0.9)
+        )
+    
+        # -------------------------
+        # 4️⃣ 이중축 범례 통합
+        # -------------------------
+        h1, l1 = ax1.get_legend_handles_labels()
+        h2, l2 = ax2.get_legend_handles_labels()
+        ax1.legend(h1 + h2, l1 + l2, loc="upper right", frameon=True)
+    
     st.pyplot(fig, use_container_width=True)
 
     st.caption("Tip: 운영팀/리스크팀은 'Lift'가 높은 세그먼트를 우선적으로 관리 대상으로 삼는 경우가 많습니다.")
