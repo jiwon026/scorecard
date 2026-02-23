@@ -602,11 +602,20 @@ def _upper_from_full_industry(s: str) -> str:
 
 @st.cache_data(show_spinner=False)
 def build_upper_industry_options_and_rep(job_ind_df: pd.DataFrame, sample_path: Path):
-    """
-    - 선택지: sample_scoring에서 산업군_상위 unique를 가져오되, 무역/산업/운송은 제거
-    - 대표 매핑: 산업군_상위 -> job_ind_df의 '산업군' (예: '교육 2') 중 대표 1개로 매핑
-    """
-    # 1) sample_scoring 읽기
+    def _upper_from_full_industry(full: str) -> str:
+        full = str(full).strip()
+        # "교육 2" -> "교육"
+        parts = full.split()
+        if len(parts) >= 2 and parts[-1].isdigit():
+            return " ".join(parts[:-1]).strip()
+        # "교육2" -> "교육"
+        m = re.match(r"^(.*?)(\d+)$", full)
+        if m:
+            return m.group(1).strip()
+        return full
+
+    # 1) 샘플 데이터 읽기
+    sample_path = Path(sample_path)
     if sample_path.suffix.lower() == ".parquet":
         df_s = pd.read_parquet(sample_path)
     else:
@@ -629,15 +638,28 @@ def build_upper_industry_options_and_rep(job_ind_df: pd.DataFrame, sample_path: 
     options = [x for x in options if x not in banned]
     options = sorted(options)
 
-    # 3) 대표 매핑(상위 -> 실제 산업군 문자열)
+    # 3) 대표 매핑: 상위 -> job_ind_df의 실제 산업군 문자열(예: 교육 -> "교육 2")
     rep = {}
     if "산업군" in job_ind_df.columns:
-        for full in job_ind_df["산업군"].dropna().astype(str):
+        full_list = job_ind_df["산업군"].dropna().astype(str).tolist()
+        for full in full_list:
             up = _upper_from_full_industry(full)
             if up not in rep:
                 rep[up] = full
 
     return options, rep
+
+# =========================
+# Policy helper
+# =========================
+def policy_reco_by_grade(grade: str):
+    grade = str(grade).strip()
+    if grade == "High":
+        return "🔴 High 고객 추천 액션", ["한도/결제조건 조정","사전 안내·콜센터","연체예방 캠페인/리마인드"], "error"
+    elif grade == "Mid":
+        return "🟠 Mid 고객 추천 액션", ["모니터링 강화","자동이체/분할납부 유도","행동기반 알림"], "warning"
+    else:
+        return "🟢 Low 고객 추천 액션", ["정상 유지","우량 고객 프로모션","과도 제약 최소화"], "success"
 
 # =========================
 # 4) Streamlit UI
