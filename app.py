@@ -643,7 +643,7 @@ def build_upper_industry_options_and_rep(job_ind_df: pd.DataFrame, sample_path: 
 # 4) Streamlit UI
 # =========================
 st.set_page_config(page_title="연체 리스크 스코어카드", layout="wide")
-st.title("연체 리스크 스코어카드 대시보드 (Excel Scorecard 기반)")
+st.title("연체 리스크 스코어카드")
 
 meta, cont_df, cat_df, cross_df, bin_df, flag_df, job_ind_df = load_scorecard_excel("v2")
 
