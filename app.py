@@ -799,7 +799,7 @@ with tabs[1]:
     industry_upper_options, upper_to_rep_full = \
         build_upper_industry_options_and_rep(job_ind_df, sample_path)
     st.subheader("고객정보 입력 → 점수/확률/등급 산출")
-    st.caption("입력값으로 연체 위험(PD)과 등급을 계산하고, 하단에서 왜 그런 결과가 나왔는지(Reason Codes)를 바로 확인합니다.")
+    st.caption("입력 tip - 산업군은 '상위 산업군'만 선택합니다. (무역/산업/운송은 제외)")
 
     left, right = st.columns([1.15, 1])
 
