@@ -938,7 +938,7 @@ with tabs[0]:
     a, b, c, d = st.columns(4)
     
     with a:
-        st.markdown("#### 🟢 우대  <small style='color:gray'>Score ≥ 670</small>", unsafe_allow_html=True)
+        st.markdown("#### 🟢 우대 \n<small style='color:gray'>Score ≥ 670</small>", unsafe_allow_html=True)
         st.markdown(
             "- 정상 유지\n"
             "- 우량 고객 프로모션\n"
