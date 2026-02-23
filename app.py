@@ -788,6 +788,16 @@ with tabs[0]:
 
 # ---- 고객 입력 & Explain
 with tabs[1]:
+    # ---- 산업군 상위 옵션 생성 (form 전에 반드시 위치)
+    base_dir = Path(__file__).resolve().parent
+    art_dir = base_dir / "artifacts"
+    
+    sample_path = art_dir / "sample_scoring.parquet"
+    if not sample_path.exists():
+        sample_path = art_dir / "sample_scoring.csv"
+    
+    industry_upper_options, upper_to_rep_full = \
+        build_upper_industry_options_and_rep(job_ind_df, sample_path)
     st.subheader("고객정보 입력 → 점수/확률/등급 산출")
     st.caption("입력값으로 연체 위험(PD)과 등급을 계산하고, 하단에서 왜 그런 결과가 나왔는지(Reason Codes)를 바로 확인합니다.")
 
