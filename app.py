@@ -561,80 +561,130 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
                                   bin_map,
                                   flag_map,
                                   job_ind_map):
+    """
+    샘플(포트폴리오) KPI 계산 - '점수 컷(우대/안정/위험/고위험)' 기준
+
+    반환 키(Overview/그래프 호환):
+      - n
+      - avg_pd                (0~1)
+      - high_share            (고위험 비중, 0~1)
+      - high_avg_pd           (고위험 평균 PD, 0~1)
+      - grade_dist            (DataFrame: grade,count,share[%])
+      - overall_dr            (0~1, TARGET 있을 때)
+      - dr_by_grade           (DataFrame: grade, dr[%])
+      - lift_by_grade         (DataFrame: grade, lift_vs_overall)
+    """
     df = df.copy()
     df = df.replace({"": np.nan, " ": np.nan})
 
-    # 숫자 컬럼 정리
+    # -------------------------
+    # 0) 타입/결측 정리(안전)
+    # -------------------------
     num_cols = ["나이","근속연수","가입연수","연간 수입","거주지 인구 비율","가족 구성원 수","자녀 수"]
     for c in num_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    # binary 컬럼 정리
     bin_cols = ["차량 소유 여부","부동산 소유 여부","배우자유무"]
     for c in bin_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)
 
-    # --- proba 산출
+    # 문자열 컬럼 strip(있으면)
+    str_cols = ["성별","결혼 여부","직업","산업군","수입 유형","최종 학력","주거 형태","자녀수_구간"]
+    for c in str_cols:
+        if c in df.columns:
+            df[c] = df[c].astype(str).str.strip().replace({"nan": np.nan})
+
+    # -------------------------
+    # 1) score / proba 산출
+    # -------------------------
     records = df.to_dict("records")
-    probas = np.empty(len(records), dtype=float)
+    n = len(records)
+
+    scores = np.empty(n, dtype=float)
+    probas = np.empty(n, dtype=float)
+
     for i, r in enumerate(records):
-        _, p = score_one_fast(r, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map)
+        s, p = score_one_fast(r, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map)
+        scores[i] = s
         probas[i] = p
 
-    # --- 등급(A~E): PD 높은 쪽이 A(리스크 높음)
-    q80, q60, q40, q20 = np.quantile(probas, [0.80, 0.60, 0.40, 0.20])
-    grade5 = np.where(probas >= q80, "A",
-              np.where(probas >= q60, "B",
-              np.where(probas >= q40, "C",
-              np.where(probas >= q20, "D", "E"))))
+    # -------------------------
+    # 2) 점수 컷으로 등급(4단계) 부여
+    #    고위험: ~549
+    #    위험  : 550~599
+    #    안정  : 600~669
+    #    우대  : 670~
+    # -------------------------
+    def score_to_grade4(s: float) -> str:
+        if s <= 549:
+            return "고위험"
+        elif s <= 599:
+            return "위험"
+        elif s <= 669:
+            return "안정"
+        else:
+            return "우대"
 
-    order = ["A","B","C","D","E"]
+    grade4 = np.array([score_to_grade4(s) for s in scores])
 
-    # --- A~E 분포 테이블 (Overview 그래프에서 기대하는 key: grade_dist)
-    cnt = pd.Series(grade5).value_counts().reindex(order, fill_value=0)
-    grade_dist = pd.DataFrame({
-        "grade": cnt.index,
-        "count": cnt.values,
-        "share": (cnt.values / len(df) * 100.0)
-    })
+    # 시각화/보고서용 정렬(좋음 -> 나쁨)
+    grade_order = ["우대", "안정", "위험", "고위험"]
 
-    # --- 전체 평균 PD
-    avg_pd = float(np.mean(probas))
+    # -------------------------
+    # 3) Overview KPI(4개)
+    # -------------------------
+    avg_pd = float(np.mean(probas)) if n else np.nan
 
-    # --- 고위험군 정의(기본): High = Top20% (A)
-    #     너 코드에서 high_share/high_avg_pd를 쓰고 있으니 여기서 맞춰줌
-    high_mask = (grade5 == "A")
-    high_share = float(high_mask.mean())
+    high_mask = (grade4 == "고위험")
+    high_share = float(high_mask.mean()) if n else np.nan
     high_avg_pd = float(np.mean(probas[high_mask])) if np.any(high_mask) else np.nan
 
     out = {
-        "n": int(len(df)),
-        "avg_pd": avg_pd,
-        "high_share": high_share,
-        "high_avg_pd": high_avg_pd,
-        "grade_dist": grade_dist,
+        "n": int(n),
+        "avg_pd": avg_pd,                 # 0~1
+        "high_share": high_share,         # 0~1
+        "high_avg_pd": high_avg_pd,       # 0~1
     }
 
-    # --- TARGET 있으면 등급별 실제 연체율 테이블 (grade_dr)
+    # -------------------------
+    # 4) 등급 분포(share[%]) - 그래프 막대용
+    # -------------------------
+    cnt = pd.Series(grade4).value_counts().reindex(grade_order, fill_value=0)
+    out["grade_dist"] = pd.DataFrame({
+        "grade": cnt.index,
+        "count": cnt.values,
+        "share": (cnt.values / n * 100.0) if n else 0.0
+    })
+
+    # -------------------------
+    # 5) TARGET 있으면 실제 연체율/리프트
+    # -------------------------
     if "TARGET" in df.columns:
         y = pd.to_numeric(df["TARGET"], errors="coerce").fillna(0).astype(int).values
         overall_dr = float(y.mean()) if len(y) else np.nan
-        out["overall_dr"] = overall_dr
+        out["overall_dr"] = overall_dr  # 0~1
 
-        dr_list = []
-        for g in order:
-            m = (grade5 == g)
-            dr = float(y[m].mean()) if np.any(m) else np.nan
-            dr_list.append(dr * 100.0 if not np.isnan(dr) else np.nan)
+        dr_rows = []
+        lift_rows = []
 
-        out["grade_dr"] = pd.DataFrame({"grade": order, "dr": dr_list})
+        for g in grade_order:
+            m = (grade4 == g)
+            dr = float(y[m].mean()) if np.any(m) else np.nan          # 0~1
+            dr_pct = dr * 100.0 if not np.isnan(dr) else np.nan      # %
+            lift = (dr / overall_dr) if (not np.isnan(dr) and not np.isnan(overall_dr) and overall_dr > 0) else np.nan
+
+            dr_rows.append({"grade": g, "dr": dr_pct})
+            lift_rows.append({"grade": g, "lift": lift})
+
+        out["dr_by_grade"] = pd.DataFrame(dr_rows)         # grade, dr(%)
+        out["lift_by_grade"] = pd.DataFrame(lift_rows)     # grade, lift
     else:
         out["overall_dr"] = np.nan
-        out["grade_dr"] = pd.DataFrame({"grade": order, "dr": [np.nan]*5})
+        out["dr_by_grade"] = pd.DataFrame({"grade": grade_order, "dr": [np.nan]*len(grade_order)})
+        out["lift_by_grade"] = pd.DataFrame({"grade": grade_order, "lift": [np.nan]*len(grade_order)})
 
-    out["dr_by_grade"] = out["grade_dr"]                                   
     return out
 
 def _upper_from_full_industry(s: str) -> str:
@@ -805,16 +855,15 @@ with tabs[0]:
         # =========================
         st.markdown("### 등급별 고객 비중 & 실제 연체율 (A~E)")
 
-        grade_order = ["A", "B", "C", "D", "E"]
-        
-        dist_df = kpi["grade_dist"]          # columns: grade, count, share(%)
-        dr_df   = kpi["dr_by_grade"]         # columns: grade, dr(%)
+        grade_order = ["우대", "안정", "위험", "고위험"]
+        dist_df = kpi["grade_dist"]
+        dr_df   = kpi["dr_by_grade"]
         
         share_map = dict(zip(dist_df["grade"], dist_df["share"]))
         dr_map    = dict(zip(dr_df["grade"], dr_df["dr"]))
         
-        share = [share_map.get(g, 0.0) for g in grade_order]      # 이미 %
-        dr    = [dr_map.get(g, np.nan) for g in grade_order]      # 이미 %
+        share = [share_map.get(g, 0.0) for g in grade_order]
+        dr    = [dr_map.get(g, np.nan) for g in grade_order]
         
         x = np.arange(len(grade_order))
         
