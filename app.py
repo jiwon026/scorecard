@@ -654,12 +654,38 @@ def build_upper_industry_options_and_rep(job_ind_df: pd.DataFrame, sample_path: 
 # =========================
 def policy_reco_by_grade(grade: str):
     grade = str(grade).strip()
+
     if grade == "High":
-        return "🔴 High 고객 추천 액션", ["한도/결제조건 조정","사전 안내·콜센터","연체예방 캠페인/리마인드"], "error"
+        title = "🔴 즉시 관리 대상"
+        items = [
+            "• 한도 및 결제 조건 재조정 검토",
+            "• 사전 안내 및 콜센터 선제 연락",
+            "• 연체 예방 알림/캠페인 자동 적용",
+            "• 집중 모니터링 리스트 포함"
+        ]
+        box = "error"
+
     elif grade == "Mid":
-        return "🟠 Mid 고객 추천 액션", ["모니터링 강화","자동이체/분할납부 유도","행동기반 알림"], "warning"
+        title = "🟠 모니터링 강화 대상"
+        items = [
+            "• 자동이체 등록 유도",
+            "• 분할납부 옵션 안내",
+            "• 행동 기반 알림 강화",
+            "• 정기 리스크 점검 대상 포함"
+        ]
+        box = "warning"
+
     else:
-        return "🟢 Low 고객 추천 액션", ["정상 유지","우량 고객 프로모션","과도 제약 최소화"], "success"
+        title = "🟢 우량 유지 대상"
+        items = [
+            "• 정상 유지 관리",
+            "• 우량 고객 프로모션 제안",
+            "• 과도한 제약 최소화",
+            "• 장기 고객 전환 전략 적용"
+        ]
+        box = "success"
+
+    return title, items, box
 
 # =========================
 # 4) Streamlit UI
