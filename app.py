@@ -787,28 +787,12 @@ with tabs[0]:
         st.markdown("#### 🟢 Low (예: D~E)")
         st.markdown("- 정상 유지\n- 우량 고객 프로모션\n- 과도 제약 최소화")
 
-# ---- Demo input
+# ---- 고객 입력 & Explain
 with tabs[1]:
     st.subheader("고객정보 입력 → 점수/확률/등급 산출")
-    st.caption("※ scorecard_export.xlsx의 점수표를 그대로 사용합니다.")
+    st.caption("입력값으로 연체 위험(PD)과 등급을 계산하고, 하단에서 왜 그런 결과가 나왔는지(Reason Codes)를 바로 확인합니다.")
 
     left, right = st.columns([1.15, 1])
-
-    # ✅ 산업군(상위) 옵션: sample_scoring에서 읽고(=train에서 뽑은 샘플),
-    #    무역/산업/운송은 제외, 그리고 점수 계산용 '산업군' 문자열로 대표 매핑
-    base_dir = Path(__file__).resolve().parent
-    art_dir = base_dir / "artifacts"
-
-    # parquet이 없으면 csv로 바꿔도 됨
-    sample_path = art_dir / "sample_scoring.parquet"
-    if not sample_path.exists():
-        sample_path = art_dir / "sample_scoring.csv"
-    
-    industry_upper_options, upper_to_rep_full = build_upper_industry_options_and_rep(job_ind_df, sample_path)
-
-    # 옵션이 비면 fallback(최소 동작)
-    if not industry_upper_options:
-        industry_upper_options = ["기타"]
 
     with left:
         with st.form("demo_form"):
@@ -820,7 +804,7 @@ with tabs[1]:
                 결혼 = st.selectbox("결혼 여부", ["미혼", "기혼", "별거", "사별", "사실혼"])
 
             with c2:
-                # ✅ 직업: UI에서는 "기타"로 보이게, 내부 값은 "Unknown"
+                # 직업: UI 표기 '기타' -> 내부 'Unknown'
                 job_options_ui = [
                     "기타", "단순 노동자","영업직","핵심 노동자","관리직","운전자","기술직","회계사",
                     "의료 업계 종사자","보안 업계 종사자","조리사","미화원","가정부","저임금 노동자",
@@ -829,11 +813,9 @@ with tabs[1]:
                 직업_ui = st.selectbox("직업", job_options_ui, index=0)
                 직업 = "Unknown" if 직업_ui == "기타" else 직업_ui
 
-                # ✅ 산업군(상위): 무역/산업/운송 제외된 리스트에서 선택
-                산업군_상위 = st.selectbox("산업군(상위)", industry_upper_options, index=0)
-
-                # ✅ 내부 점수 계산용 산업군 문자열로 대표 매핑 (예: "교육" -> "교육 2")
-                산업군 = upper_to_rep_full.get(산업군_상위, 산업군_상위)
+                산업군_상위 = st.selectbox("산업군(상위)", industry_upper_options)  # 너가 만든 옵션 사용
+                # 선택된 상위 산업군을 실제 '산업군' 문자열로 매핑(예: 교육 -> 교육 2)
+                산업군 = upper_to_rep_full.get(산업군_상위, "")  # 내부 계산용
 
                 근속연수 = st.number_input("근속연수(년)", 0.0, 50.0, 3.0, step=0.5)
 
@@ -867,8 +849,7 @@ with tabs[1]:
                 "나이": float(나이),
                 "결혼 여부": 결혼,
                 "직업": 직업,
-                "산업군": 산업군,              # ✅ 대표 매핑된 값으로 들어감
-                "산업군_상위": 산업군_상위,    # ✅ (선택) 기록용
+                "산업군": 산업군,  # 내부 계산은 job_ind_points 기준 문자열
                 "근속연수": float(근속연수),
                 "가입연수": float(가입연수),
                 "연간 수입": float(연간수입),
@@ -894,38 +875,37 @@ with tabs[1]:
             st.session_state["last_bd"] = bd
             st.session_state["last_result"] = (score, proba, grade)
 
-            st.success(f"Score: **{score:.1f}** | 연체확률: **{proba:.3f}** | 등급: **{grade}**")
+    with right:
+        st.markdown("### 결과")
+        if "last_result" not in st.session_state:
+            st.info("좌측에서 고객 정보를 입력하고 ‘등급 산출’을 눌러주세요.")
+        else:
+            score, proba, grade = st.session_state["last_result"]
+            st.success(f"Score: **{score:.1f}**")
+            st.metric("연체확률(PD)", f"{proba:.3f}")
+            st.metric("등급", grade)
             st.progress(min(max(proba, 0.0), 1.0))
 
-    with right:
-        st.markdown("### 입력 가이드(발표 스토리)")
-        st.write(
-            "- 신규/변경 고객의 기본정보로 연체 위험을 조기 탐지\n"
-            "- High/Mid/Low 등급에 따라 선제 정책 적용\n"
-            "- 아래 입력은 샘플 고객 기준 데모"
-        )
-        st.caption("Tip: 산업군은 '상위 산업군'만 선택합니다. (무역/산업/운송은 제외)")
+    # =========================
+    # Explain: 같은 탭 아래에 바로 표시
+    # =========================
+    st.divider()
+    st.subheader("Explainability: Reason Codes")
 
-
-# ---- Reason Codes
-with tabs[2]:
-    st.subheader("Explainability: Reason Codes (리스크 요인 Top)")
     if "last_bd" not in st.session_state:
-        st.info("② 고객정보 입력(데모) 탭에서 먼저 등급을 산출하세요.")
+        st.info("위에서 고객정보를 입력 후 등급을 산출하면, 왜 그런 결과인지 여기에서 바로 확인할 수 있어요.")
     else:
-        score, proba, grade = st.session_state["last_result"]
         bd = st.session_state["last_bd"].copy()
 
-        st.write(f"결과: Score={score:.1f}, Prob={proba:.3f}, Grade={grade}")
+        cA, cB = st.columns(2)
+        with cA:
+            st.markdown("#### 리스크를 높인 요인 (Top 10)")
+            st.dataframe(bd.sort_values("points").head(10), use_container_width=True)
 
-        st.markdown("#### 점수에 가장 불리하게 기여한 항목(Top 10)")
-        # points가 음수일수록 점수 깎는 요인(리스크)
-        st.dataframe(bd.sort_values("points").head(10), use_container_width=True)
+        with cB:
+            st.markdown("#### 리스크를 낮춘 요인 (Top 10)")
+            st.dataframe(bd.sort_values("points", ascending=False).head(10), use_container_width=True)
 
-        st.markdown("#### 점수에 유리하게 기여한 항목(Top 10)")
-        st.dataframe(bd.sort_values("points", ascending=False).head(10), use_container_width=True)
-
-        st.caption("Tip: 발표 때는 ‘왜 High인가?’를 이 표로 10초 안에 설명 가능하게 보여주면 점수 올라감.")
-
+        st.caption("점수(points)가 음수일수록 위험 요인(Score 감소), 양수일수록 안전 요인입니다.")
 
 st.divider()
