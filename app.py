@@ -656,8 +656,7 @@ job_ind_map = build_job_ind_map(job_ind_df)
 
 tabs = st.tabs([
     "① Overview",
-    "② 고객정보 입력",
-    "③ Explain (Reason Codes)",
+    "② 고객 입력 & Explain",
 ])
 
 # ---- Overview
