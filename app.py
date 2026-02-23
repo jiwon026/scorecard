@@ -947,7 +947,7 @@ with tabs[0]:
         )
     
     with b:
-        st.markdown("#### 🔵 안정  \n<small>Score ≥ 670</small>", unsafe_allow_html=True)
+        st.markdown("#### 🔵 안정  \n<small style='color:gray'>Score ≥ 670</small>", unsafe_allow_html=True)
         st.markdown(
             "- 정기 모니터링\n"
             "- 자동이체 유지 안내\n"
@@ -956,7 +956,7 @@ with tabs[0]:
         )
     
     with c:
-        st.markdown("#### 🟠 위험 \n<small>600 ≤ Score ≤ 669</small>", unsafe_allow_html=True)
+        st.markdown("#### 🟠 위험 \n<small style='color:gray'>600 ≤ Score ≤ 669</small>", unsafe_allow_html=True)
         st.markdown(
             "- 모니터링 강화\n"
             "- 자동이체/분할납부 유도\n"
@@ -965,7 +965,7 @@ with tabs[0]:
         )
     
     with d:
-        st.markdown("#### 🔴 고위험  \n<small>Score ≤ 549</small>", unsafe_allow_html=True)
+        st.markdown("#### 🔴 고위험  \n<small style='color:gray'>Score ≤ 549</small>", unsafe_allow_html=True)
         st.markdown(
             "- 한도/결제조건 조정\n"
             "- 사전 안내·콜센터 아웃바운드\n"
