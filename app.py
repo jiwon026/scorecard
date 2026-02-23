@@ -793,6 +793,32 @@ def policy_reco_by_grade(grade):
             ],
             "success"
         )
+
+def grade_color(grade: str):
+    mp = {
+        "우대":   ("#E9F7EF", "#2ECC71", "#1E8449"),
+        "안정":   ("#EAF2FF", "#4C78A8", "#1F4E79"),
+        "위험":   ("#FFF4E5", "#F39C12", "#8A4B00"),
+        "고위험": ("#FDECEC", "#E74C3C", "#922B21"),
+    }
+    return mp.get(grade, ("#F5F5F5", "#999999", "#333333"))
+
+
+def metric_card(title: str, value: str, bg: str, border: str, text: str, sub: str = ""):
+    sub_html = f"""<div style="margin-top:6px; font-size:12px; color:{text}; opacity:0.75;">{sub}</div>""" if sub else ""
+    return f"""
+    <div style="
+        background:{bg};
+        border-left:6px solid {border};
+        padding:14px 16px;
+        border-radius:12px;
+        margin-bottom:10px;
+    ">
+      <div style="font-size:13px; color:{text}; opacity:0.85; font-weight:700;">{title}</div>
+      <div style="font-size:28px; color:{text}; font-weight:800; line-height:1.15;">{value}</div>
+      {sub_html}
+    </div>
+    """
 def grade_color(grade: str):
     # 배경/테두리/글자색 (원하면 더 진하게 조정 가능)
     mp = {
@@ -1079,46 +1105,32 @@ with tabs[1]:
             st.session_state["last_result"] = (score, proba, grade)
 
     with right:
-        st.markdown("### 결과")
-        if "last_result" not in st.session_state:
-            st.info("좌측에서 고객 정보를 입력하고 ‘등급 산출’을 눌러주세요.")
-        else:
-            score, proba, grade = st.session_state["last_result"]
-            bg, border, text = grade_color(grade)
+    st.markdown("### 결과")
 
-            st.markdown(
-                f"""
-                <div style="
-                    background:{bg};
-                    border-left:6px solid {border};
-                    padding:14px 16px;
-                    border-radius:10px;
-                    margin-bottom:10px;
-                ">
-                  <div style="font-size:14px; color:{text}; opacity:0.9; font-weight:700;">Score</div>
-                  <div style="font-size:28px; color:{text}; font-weight:800; line-height:1.1;">
-                    {score:.1f}
-                  </div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-            st.metric("연체확률(PD)", f"{proba:.3f}")
-            st.metric("등급", grade)
-            st.progress(min(max(proba, 0.0), 1.0))
-            # right column 결과 표시 부분 내부(grade가 있을 때)
-            title, items, box = policy_reco_by_grade(grade)
-            
-            msg = "\n".join([f"- {x}" for x in items])
-            
-            st.markdown("### 🎯 권장 운영 액션")
-            
-            if box == "error":
-                st.error(f"**{title}**\n\n{msg}")
-            elif box == "warning":
-                st.warning(f"**{title}**\n\n{msg}")
-            else:
-                st.success(f"**{title}**\n\n{msg}")
+    if "last_result" not in st.session_state:
+        st.info("좌측에서 고객 정보를 입력하고 ‘등급 산출’을 눌러주세요.")
+    else:
+        score, proba, grade = st.session_state["last_result"]
+        bg, border, text = grade_color(grade)
+
+        # ✅ Score / PD / Grade 카드
+        st.markdown(metric_card("Score", f"{score:.1f}", bg, border, text, sub="점수카드 합산 결과"), unsafe_allow_html=True)
+        st.markdown(metric_card("연체확률 (PD)", f"{proba:.3f}", bg, border, text, sub="점수 → 확률 변환 결과"), unsafe_allow_html=True)
+        st.markdown(metric_card("등급", grade, bg, border, text, sub="점수컷 기준(우대/안정/위험/고위험)"), unsafe_allow_html=True)
+
+        st.progress(min(max(proba, 0.0), 1.0))
+
+        # ✅ 등급별 정책(맞춤 강조)
+        st.markdown("### 🎯 권장 운영 액션")
+        title, items, box = policy_reco_by_grade(grade)
+        msg = "\n".join([f"- {x}" for x in items])
+
+        if box == "error":
+            st.error(f"**{title}**\n\n{msg}")
+        elif box == "warning":
+            st.warning(f"**{title}**\n\n{msg}")
+        else:
+            st.success(f"**{title}**\n\n{msg}")
 
     # =========================
     # Explain: 같은 탭 아래에 바로 표시
