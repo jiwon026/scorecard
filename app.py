@@ -1088,8 +1088,6 @@ with tabs[1]:
                 "차량 소유 여부": int(차량),
                 "부동산 소유 여부": int(부동산),
                 "배우자유무": int(배우자유무),
-                "_mid_cut": float(mid_cut),
-                "_high_cut": float(high_cut),
             }
 
             score, proba, grade, bd = score_one(
