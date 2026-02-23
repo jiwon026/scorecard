@@ -797,35 +797,19 @@ with tabs[0]:
     st.divider()
     st.markdown("### 🎯 권장 운영 정책")
     
-    if "last_result" in st.session_state:
-        _, _, grade = st.session_state["last_result"]
+    a, b, c = st.columns(3)
+
+    with a:
+        st.markdown("#### 🔴 High")
+        st.markdown("- 한도/결제조건 조정\n- 사전 안내·콜센터\n- 연체예방 캠페인/리마인드")
     
-        if grade == "High":
-            st.error(
-                "🔴 **High 등급 고객 권장 액션**\n\n"
-                "- 한도/결제조건 조정\n"
-                "- 사전 안내·콜센터\n"
-                "- 연체예방 캠페인/리마인드"
-            )
+    with b:
+        st.markdown("#### 🟠 Mid")
+        st.markdown("- 모니터링 강화\n- 자동이체/분할납부 유도\n- 행동기반 알림")
     
-        elif grade == "Mid":
-            st.warning(
-                "🟠 **Mid 등급 고객 권장 액션**\n\n"
-                "- 모니터링 강화\n"
-                "- 자동이체/분할납부 유도\n"
-                "- 행동기반 알림"
-            )
-    
-        else:
-            st.success(
-                "🟢 **Low 등급 고객 권장 액션**\n\n"
-                "- 정상 유지\n"
-                "- 우량 고객 프로모션\n"
-                "- 과도 제약 최소화"
-            )
-    
-    else:
-        st.info("고객 정보를 입력하고 등급을 산출하면, 권장 정책이 자동으로 표시됩니다.")
+    with c:
+        st.markdown("#### 🟢 Low")
+        st.markdown("- 정상 유지\n- 우량 고객 프로모션\n- 과도 제약 최소화")
 
 # ---- 고객 입력 & Explain
 with tabs[1]:
