@@ -747,40 +747,53 @@ def build_upper_industry_options_and_rep(job_ind_df: pd.DataFrame, sample_path: 
 # =========================
 # Policy helper
 # =========================
-def policy_reco_by_grade(grade: str):
-    grade = str(grade).strip()
+def policy_reco_by_grade(grade):
 
-    if grade == "High":
-        title = "🔴 즉시 관리 대상"
-        items = [
-            "한도 및 결제 조건 재조정 검토",
-            "사전 안내 및 콜센터 선제 연락",
-            "연체 예방 알림/캠페인 자동 적용",
-            "집중 모니터링 리스트 포함"
-        ]
-        box = "error"
+    if grade == "고위험":
+        return (
+            "🔴 고위험 고객 – 선제적 리스크 관리 필요",
+            [
+                "한도/결제조건 조정",
+                "콜센터 사전 안내",
+                "연체 예방 캠페인",
+                "집중 모니터링"
+            ],
+            "error"
+        )
 
-    elif grade == "Mid":
-        title = "🟠 모니터링 강화 대상"
-        items = [
-            "자동이체 등록 유도",
-            "분할납부 옵션 안내",
-            "행동 기반 알림 강화",
-            "정기 리스크 점검 대상 포함"
-        ]
-        box = "warning"
+    elif grade == "위험":
+        return (
+            "🟠 위험 고객 – 관리 강화 필요",
+            [
+                "자동이체/분할납부 유도",
+                "행동기반 알림",
+                "한도 점검",
+                "리스크 모니터링 강화"
+            ],
+            "warning"
+        )
 
-    else:
-        title = "🟢 우량 유지 대상"
-        items = [
-            "정상 유지 관리",
-            "우량 고객 프로모션 제안",
-            "과도한 제약 최소화",
-            "장기 고객 전환 전략 적용"
-        ]
-        box = "success"
+    elif grade == "안정":
+        return (
+            "🔵 안정 고객 – 일반 관리",
+            [
+                "정기 모니터링",
+                "리마인드 메시지",
+                "관계 유지 관리"
+            ],
+            "success"
+        )
 
-    return title, items, box
+    else:  # 우대
+        return (
+            "🟢 우대 고객 – 가치 극대화",
+            [
+                "금리/한도 우대 검토",
+                "우량 고객 프로모션",
+                "Cross-sell 기회 발굴"
+            ],
+            "success"
+        )
 
 # =========================
 # 4) Streamlit UI
@@ -920,21 +933,45 @@ with tabs[0]:
     # 4) 운영 정책 예시
     # =========================
     st.divider()
-    st.markdown("### 🎯 권장 운영 정책")
+    st.markdown("### 🎯 권장 운영 정책 (Score-based Action)")
     
-    a, b, c = st.columns(3)
-
+    a, b, c, d = st.columns(4)
+    
     with a:
-        st.markdown("#### 🔴 High")
-        st.markdown("- 한도/결제조건 조정\n- 사전 안내·콜센터\n- 연체예방 캠페인/리마인드")
+        st.markdown("#### 🟢 우대 (670점 이상)")
+        st.markdown(
+            "- 정상 유지\n"
+            "- 우량 고객 프로모션\n"
+            "- 금리/한도 우대 검토\n"
+            "- 과도 제약 최소화"
+        )
     
     with b:
-        st.markdown("#### 🟠 Mid")
-        st.markdown("- 모니터링 강화\n- 자동이체/분할납부 유도\n- 행동기반 알림")
+        st.markdown("#### 🔵 안정 (600~669)")
+        st.markdown(
+            "- 정기 모니터링\n"
+            "- 자동이체 유지 안내\n"
+            "- 고객 관리 강화\n"
+            "- 소프트 리마인드"
+        )
     
     with c:
-        st.markdown("#### 🟢 Low")
-        st.markdown("- 정상 유지\n- 우량 고객 프로모션\n- 과도 제약 최소화")
+        st.markdown("#### 🟠 위험 (550~599)")
+        st.markdown(
+            "- 모니터링 강화\n"
+            "- 자동이체/분할납부 유도\n"
+            "- 행동기반 알림\n"
+            "- 한도 점검"
+        )
+    
+    with d:
+        st.markdown("#### 🔴 고위험 (549점 이하)")
+        st.markdown(
+            "- 한도/결제조건 조정\n"
+            "- 사전 안내·콜센터 아웃바운드\n"
+            "- 연체예방 캠페인\n"
+            "- 선제 리스크 관리"
+        )
 
 # ---- 고객 입력 & Explain
 with tabs[1]:
@@ -1048,6 +1085,8 @@ with tabs[1]:
             title, items, box = policy_reco_by_grade(grade)
             
             msg = "\n".join([f"- {x}" for x in items])
+            
+            st.markdown("### 🎯 권장 운영 액션")
             
             if box == "error":
                 st.error(f"**{title}**\n\n{msg}")
