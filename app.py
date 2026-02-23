@@ -579,66 +579,60 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
     # --- proba 산출
     records = df.to_dict("records")
     probas = np.empty(len(records), dtype=float)
-
     for i, r in enumerate(records):
         _, p = score_one_fast(r, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map)
         probas[i] = p
 
-    # --- 등급(A~E) 만들기: PD 높은 쪽이 A(리스크 높음)
-    #     5분위 cut: 상위 20% = A, 다음 20% = B ...
+    # --- 등급(A~E): PD 높은 쪽이 A(리스크 높음)
     q80, q60, q40, q20 = np.quantile(probas, [0.80, 0.60, 0.40, 0.20])
-
     grade5 = np.where(probas >= q80, "A",
               np.where(probas >= q60, "B",
               np.where(probas >= q40, "C",
               np.where(probas >= q20, "D", "E"))))
 
-    # --- High/Mid/Low도 유지(기존 로직과 호환)
-    high_cut = float(q80)              # Top20%
-    mid_cut  = float(np.quantile(probas, 0.40))  # Top60% 기준(=40% quantile)
-    grade3 = np.where(probas >= high_cut, "High",
-             np.where(probas >= mid_cut, "Mid", "Low"))
-
-    out = {
-        "n": int(len(df)),
-        "overall_pd": float(np.mean(probas)),
-        "high_cut": float(high_cut),
-        "mid_cut": float(mid_cut),
-        "high_share": float((grade3 == "High").mean()),
-        "mid_share": float((grade3 == "Mid").mean()),
-        "low_share": float((grade3 == "Low").mean()),
-        "high_pd": float(np.mean(probas[grade3 == "High"])) if np.any(grade3 == "High") else np.nan,
-    }
-
-    # --- Overview에서 쓰는 key: grade_dist (A~E 분포)
     order = ["A","B","C","D","E"]
+
+    # --- A~E 분포 테이블 (Overview 그래프에서 기대하는 key: grade_dist)
     cnt = pd.Series(grade5).value_counts().reindex(order, fill_value=0)
-    dist_df = pd.DataFrame({
+    grade_dist = pd.DataFrame({
         "grade": cnt.index,
         "count": cnt.values,
         "share": (cnt.values / len(df) * 100.0)
     })
-    out["grade_dist"] = dist_df
 
-    # --- TARGET 있으면 등급별 실제 연체율도 같이 만들어줌(그래프용)
+    # --- 전체 평균 PD
+    avg_pd = float(np.mean(probas))
+
+    # --- 고위험군 정의(기본): High = Top20% (A)
+    #     너 코드에서 high_share/high_avg_pd를 쓰고 있으니 여기서 맞춰줌
+    high_mask = (grade5 == "A")
+    high_share = float(high_mask.mean())
+    high_avg_pd = float(np.mean(probas[high_mask])) if np.any(high_mask) else np.nan
+
+    out = {
+        "n": int(len(df)),
+        "avg_pd": avg_pd,
+        "high_share": high_share,
+        "high_avg_pd": high_avg_pd,
+        "grade_dist": grade_dist,
+    }
+
+    # --- TARGET 있으면 등급별 실제 연체율 테이블 (grade_dr)
     if "TARGET" in df.columns:
         y = pd.to_numeric(df["TARGET"], errors="coerce").fillna(0).astype(int).values
         overall_dr = float(y.mean()) if len(y) else np.nan
         out["overall_dr"] = overall_dr
 
-        dr_by = []
+        dr_list = []
         for g in order:
             m = (grade5 == g)
             dr = float(y[m].mean()) if np.any(m) else np.nan
-            dr_by.append(dr * 100.0 if not np.isnan(dr) else np.nan)
+            dr_list.append(dr * 100.0 if not np.isnan(dr) else np.nan)
 
-        out["grade_dr"] = pd.DataFrame({
-            "grade": order,
-            "dr": dr_by
-        })
+        out["grade_dr"] = pd.DataFrame({"grade": order, "dr": dr_list})
     else:
         out["overall_dr"] = np.nan
-        out["grade_dr"] = pd.DataFrame({"grade": ["A","B","C","D","E"], "dr": [np.nan]*5})
+        out["grade_dr"] = pd.DataFrame({"grade": order, "dr": [np.nan]*5})
 
     return out
 
