@@ -1065,10 +1065,6 @@ with tabs[1]:
             부동산 = st.selectbox("부동산 소유 여부", [0, 1], format_func=lambda x: "있음" if x==1 else "없음")
             배우자유무 = st.selectbox("배우자유무", [0, 1], format_func=lambda x: "있음" if x==1 else "없음")
 
-            # 등급 컷 조절(발표용)
-            st.markdown("##### 등급 컷(확률 기반) 조절")
-            mid_cut = st.slider("Mid cut", 0.30, 0.70, 0.50, 0.01)
-            high_cut = st.slider("High cut", 0.40, 0.90, 0.65, 0.01)
 
             submitted = st.form_submit_button("🚀 등급 산출")
 
