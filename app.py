@@ -425,21 +425,50 @@ def score_one_fast(row: dict,
                    flag_map,
                    job_ind_map):
     """
-    score_one()의 '포트폴리오 일괄 산출용' 경량 버전
-    - breakdown DataFrame 생성 없음(속도↑)
+    포트폴리오 일괄 산출용 경량 버전(안전 캐스팅 포함)
+    - breakdown 미생성
     - score, proba만 반환
+    - 빈 문자열/쉼표 포함 숫자/NaN 혼재에도 죽지 않음
     """
-    score = meta["base_points"]
+
+    def _as_float(v):
+        if v is None:
+            return np.nan
+        if isinstance(v, str):
+            v = v.strip()
+            if v == "":
+                return np.nan
+            v = v.replace(",", "")
+        try:
+            return float(v)
+        except Exception:
+            return np.nan
+
+    def _as_int(v, default=0):
+        if v is None:
+            return default
+        if isinstance(v, str):
+            v = v.strip()
+            if v == "":
+                return default
+            v = v.replace(",", "")
+        try:
+            return int(float(v))
+        except Exception:
+            return default
+
+    score = float(meta.get("base_points", 0.0))
 
     # ---- continuous
     cont_inputs = {
-        "근속연수_woe": float(row.get("근속연수", np.nan)),
-        "나이_woe": float(row.get("나이", np.nan)),
-        "거주지 인구 비율_woe": float(row.get("거주지 인구 비율", np.nan)),
-        "가입연수_woe": float(row.get("가입연수", np.nan)),
-        "가족 구성원 수_woe": float(row.get("가족 구성원 수", np.nan)),
-        "연간수입_woe": float(row.get("연간 수입", np.nan)),
+        "근속연수_woe": _as_float(row.get("근속연수")),
+        "나이_woe": _as_float(row.get("나이")),
+        "거주지 인구 비율_woe": _as_float(row.get("거주지 인구 비율")),
+        "가입연수_woe": _as_float(row.get("가입연수")),
+        "가족 구성원 수_woe": _as_float(row.get("가족 구성원 수")),
+        "연간수입_woe": _as_float(row.get("연간 수입")),
     }
+
     for feat, x in cont_inputs.items():
         if feat not in cont_map:
             continue
@@ -460,42 +489,42 @@ def score_one_fast(row: dict,
     for feat, val in cat_inputs.items():
         if feat not in cat_map or val is None:
             continue
-        score += float(cat_map[feat].get(str(val).strip(), 0.0))
+        v = str(val).strip()
+        if v == "":
+            continue
+        score += float(cat_map[feat].get(v, 0.0))
 
     # ---- binary (엑셀 점수카드 feature명을 그대로 사용)
     for f in bin_map.keys():
         if f in row:
-            try:
-                v = int(row[f])
-            except Exception:
-                continue
+            v = _as_int(row.get(f), default=0)
             score += float(bin_map[f].get(v, 0.0))
 
     # ---- cross
     if "성별x결혼여부_woe" in cross_map:
-        sex = row.get("성별", "남성")
-        mar = row.get("결혼 여부", "미혼")
-        sex_code = 1 if str(sex).strip() == "남성" else 0
+        sex = str(row.get("성별", "남성")).strip()
+        mar = str(row.get("결혼 여부", "미혼")).strip()
+        sex_code = 1 if sex == "남성" else 0
         key = f"{sex_code}_{mar}"
         score += float(cross_map["성별x결혼여부_woe"].get(key, 0.0))
 
-    # ---- flags (flag_map이 비어있으면 자동 스킵)
+    # ---- flags (flag_map 비어있으면 자동 스킵)
     if flag_map:
         if "한부모 가정" in flag_map:
-            spouse = int(row.get("배우자유무", 1))
-            child_n = int(row.get("자녀 수", 0))
+            spouse = _as_int(row.get("배우자유무"), default=1)
+            child_n = _as_int(row.get("자녀 수"), default=0)
             is_single_parent = 1 if (spouse == 0 and child_n > 0) else 0
             score += float(flag_map["한부모 가정"].get(is_single_parent, 0.0))
 
         if "저소득_부동산 X" in flag_map:
-            income = float(row.get("연간 수입", np.nan))
-            real_estate = int(row.get("부동산 소유 여부", 0))
+            income = _as_float(row.get("연간 수입"))
+            real_estate = _as_int(row.get("부동산 소유 여부"), default=0)
             is_low_income = 1 if (not np.isnan(income) and income <= 37_170_000) else 0
             flag_val = 1 if (is_low_income == 1 and real_estate == 0) else 0
             score += float(flag_map["저소득_부동산 X"].get(flag_val, 0.0))
 
         if "2,30대_저학력,고졸" in flag_map:
-            age = float(row.get("나이", np.nan))
+            age = _as_float(row.get("나이"))
             edu = str(row.get("최종 학력", "")).strip()
             flag_val = 1 if ((not np.isnan(age) and age < 40) and (edu in ["저학력자", "고등학교 졸업"])) else 0
             score += float(flag_map["2,30대_저학력,고졸"].get(flag_val, 0.0))
@@ -506,9 +535,12 @@ def score_one_fast(row: dict,
     score += float(job_ind_map.get((job, ind), 0.0))
 
     # ---- probability (score -> logit)
-    logit = (meta["offset"] - score) / meta["factor"]
+    factor = float(meta.get("factor", 1.0))
+    offset = float(meta.get("offset", 0.0))
+    logit = (offset - score) / factor
     proba = float(sigmoid(logit))
     return score, proba
+                       
 def load_sample_df(art_dir: Path) -> pd.DataFrame:
     """
     artifacts 폴더에서 샘플 데이터를 읽어옴.
@@ -545,52 +577,68 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
                                   bin_map,
                                   flag_map,
                                   job_ind_map):
+    df = df.copy()
+
+    # 0) 빈 문자열/공백 처리
+    df = df.replace({"": np.nan, " ": np.nan})
+
+    # 1) 숫자 컬럼 강제 변환(있으면)
+    num_cols = ["나이", "근속연수", "가입연수", "연간 수입", "거주지 인구 비율", "가족 구성원 수", "자녀 수"]
+    for c in num_cols:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    # 2) binary 컬럼(있으면)
+    bin_cols = ["차량 소유 여부", "부동산 소유 여부", "배우자유무"]
+    for c in bin_cols:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)
+
+    # 3) 확률 산출
     records = df.to_dict("records")
     probas = np.empty(len(records), dtype=float)
+
     for i, r in enumerate(records):
         _, p = score_one_fast(r, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map)
         probas[i] = p
 
-    n = int(len(df))
-    avg_pd = float(np.mean(probas)) if n > 0 else np.nan
+    # 4) Cut: Top20% = High, Top60% = Mid 이상 (기존 로직 유지)
+    high_cut = float(np.quantile(probas, 0.80))
+    mid_cut  = float(np.quantile(probas, 0.40))
 
-    # 5등급(A~E): A가 가장 위험
-    q90 = float(np.quantile(probas, 0.90))
-    q70 = float(np.quantile(probas, 0.70))
-    q40 = float(np.quantile(probas, 0.40))
-    q15 = float(np.quantile(probas, 0.15))
-
-    grade5 = np.where(probas >= q90, "A",
-              np.where(probas >= q70, "B",
-              np.where(probas >= q40, "C",
-              np.where(probas >= q15, "D", "E"))))
-
-    grade_order = ["A", "B", "C", "D", "E"]
-    grade_dist = {g: float(np.mean(grade5 == g)) for g in grade_order}
-    grade_dist_n = {g: int(np.sum(grade5 == g)) for g in grade_order}
-
-    # 고위험군: A+B(상위 30%)
-    high_mask = np.isin(grade5, ["A", "B"])
-    high_share = float(np.mean(high_mask))
-    high_avg_pd = float(np.mean(probas[high_mask])) if high_mask.any() else np.nan
+    grade = np.where(probas >= high_cut, "High",
+             np.where(probas >= mid_cut, "Mid", "Low"))
 
     out = {
-        "n": n,
-        "avg_pd": avg_pd,
-        "high_share": high_share,
-        "high_avg_pd": high_avg_pd,
-        "grade_dist": grade_dist,
-        "grade_dist_n": grade_dist_n,
+        "n": int(len(df)),
+        "high_cut": high_cut,
+        "mid_cut": mid_cut,
+        "high_share": float((grade == "High").mean()),
+        "mid_share": float((grade == "Mid").mean()),
+        "low_share": float((grade == "Low").mean()),
     }
 
+    # 5) TARGET 있으면 KPI(연체율/포착률) 계산
     if "TARGET" in df.columns:
-        y = df["TARGET"].astype(int).values
-        dr_by_grade = {}
-        for g in grade_order:
-            m = (grade5 == g)
-            dr_by_grade[g] = float(y[m].mean()) if m.any() else np.nan
-        out["dr_by_grade"] = dr_by_grade
-        out["overall_dr"] = float(y.mean())
+        y = pd.to_numeric(df["TARGET"], errors="coerce").fillna(0).astype(int).values
+        high_mask = (grade == "High")
+        low_mask  = (grade == "Low")
+
+        overall_dr = float(y.mean()) if len(y) else np.nan
+        high_dr = float(y[high_mask].mean()) if high_mask.any() else np.nan
+        low_dr  = float(y[low_mask].mean())  if low_mask.any()  else np.nan
+
+        total_bad = int((y == 1).sum())
+        bad_capture_high = float((y[high_mask] == 1).sum() / total_bad) if total_bad > 0 else np.nan
+        risk_gap = float(high_dr / low_dr) if (not np.isnan(high_dr) and not np.isnan(low_dr) and low_dr > 0) else np.nan
+
+        out.update({
+            "overall_dr": overall_dr,
+            "high_dr": high_dr,
+            "low_dr": low_dr,
+            "bad_capture_high": bad_capture_high,
+            "risk_gap": risk_gap,
+        })
 
     return out
 
