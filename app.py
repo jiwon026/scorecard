@@ -383,16 +383,15 @@ def score_one(row: dict,
     logit = (meta["offset"] - score) / meta["factor"]
     proba = float(sigmoid(logit))
 
-    # ---- grade (3등급: 분위수 대신 cut을 UI에서 조절 가능)
-    # 기본 cut은 데모용: High>=0.65, Mid>=0.50
-    high_cut = float(row.get("_high_cut", 0.65))
-    mid_cut  = float(row.get("_mid_cut", 0.50))
-    if proba >= high_cut:
-        grade = "High"
-    elif proba >= mid_cut:
-        grade = "Mid"
+    # ---- grade (점수컷 기준 4등급)
+    if score >= 670:
+        grade = "우대"
+    elif score >= 600:
+        grade = "안정"
+    elif score >= 550:
+        grade = "위험"
     else:
-        grade = "Low"
+        grade = "고위험"
 
     bd = pd.DataFrame(breakdown, columns=["feature", "value/bin", "points"]).sort_values("points")
     return score, proba, grade, bd
