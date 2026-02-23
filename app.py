@@ -793,7 +793,15 @@ def policy_reco_by_grade(grade):
             ],
             "success"
         )
-
+def grade_color(grade: str):
+    # 배경/테두리/글자색 (원하면 더 진하게 조정 가능)
+    mp = {
+        "우대":   ("#E9F7EF", "#2ECC71", "#1E8449"),  # green
+        "안정":   ("#EAF2FF", "#4C78A8", "#1F4E79"),  # blue
+        "위험":   ("#FFF4E5", "#F39C12", "#8A4B00"),  # orange
+        "고위험": ("#FDECEC", "#E74C3C", "#922B21"),  # red
+    }
+    return mp.get(grade, ("#F5F5F5", "#999999", "#333333"))
 # =========================
 # 4) Streamlit UI
 # =========================
@@ -1076,7 +1084,25 @@ with tabs[1]:
             st.info("좌측에서 고객 정보를 입력하고 ‘등급 산출’을 눌러주세요.")
         else:
             score, proba, grade = st.session_state["last_result"]
-            st.success(f"Score: **{score:.1f}**")
+            bg, border, text = grade_color(grade)
+
+            st.markdown(
+                f"""
+                <div style="
+                    background:{bg};
+                    border-left:6px solid {border};
+                    padding:14px 16px;
+                    border-radius:10px;
+                    margin-bottom:10px;
+                ">
+                  <div style="font-size:14px; color:{text}; opacity:0.9; font-weight:700;">Score</div>
+                  <div style="font-size:28px; color:{text}; font-weight:800; line-height:1.1;">
+                    {score:.1f}
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
             st.metric("연체확률(PD)", f"{proba:.3f}")
             st.metric("등급", grade)
             st.progress(min(max(proba, 0.0), 1.0))
