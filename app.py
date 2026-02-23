@@ -799,7 +799,7 @@ with tabs[1]:
     industry_upper_options, upper_to_rep_full = \
         build_upper_industry_options_and_rep(job_ind_df, sample_path)
     st.subheader("고객정보 입력 → 점수/확률/등급 산출")
-    st.caption("입력 Tip!  산업군은 '상위 산업군'만 선택합니다. (무역/산업/운송은 제외)")
+    st.caption("입력 Tip!", \n "- 산업군은 '상위 산업군'만 선택합니다. (무역/산업/운송은 제외)")
 
     left, right = st.columns([1.15, 1])
 
