@@ -345,10 +345,10 @@ def score_one(row: dict,
         breakdown.append(("성별x결혼여부_woe", key, pts))
 
     # ---- flags: 한부모 가정 / 저소득_부동산 X / 2,30대_저학력,고졸
-    # (너희 팀이 확정한 정의로 조정 가능)
     if "한부모 가정" in flag_map:
         spouse = int(row.get("배우자유무", 1))
-        child_n = int(row.get("자녀 수", 0))
+        child_bucket = row.get("자녀수_구간", "0")
+        child_n = 3 if child_bucket == "3+" else int(child_bucket)
         is_single_parent = 1 if (spouse == 0 and child_n > 0) else 0
         pts = flag_map["한부모 가정"].get(is_single_parent, 0.0)
         score += pts
@@ -1057,9 +1057,8 @@ with tabs[1]:
             수입유형 = st.selectbox("수입 유형", ["근로자", "공무원", "연금수령자", "기타"])
             학력 = st.selectbox("최종 학력", ["저학력자", "고등학교 졸업", "대학교 중퇴", "대학교 졸업 이상"])
             주거 = st.selectbox("주거 형태", ["주택 / 아파트", "아파트 임대", "기타"])
-            자녀수 = st.number_input("자녀 수", 0, 10, 0, step=1)
             가족구성 = st.number_input("가족 구성원 수", 1, 10, 2, step=1)
-            자녀구간 = st.selectbox("자녀수_구간", ["0", "1", "2", "3+"])
+            자녀구간 = st.selectbox("자녀 수", ["0", "1", "2", "3+"])
 
             차량 = st.selectbox("차량 소유 여부", [0, 1], format_func=lambda x: "있음" if x==1 else "없음")
             부동산 = st.selectbox("부동산 소유 여부", [0, 1], format_func=lambda x: "있음" if x==1 else "없음")
@@ -1082,7 +1081,6 @@ with tabs[1]:
                 "수입 유형": 수입유형,
                 "최종 학력": 학력,
                 "주거 형태": 주거,
-                "자녀 수": int(자녀수),
                 "가족 구성원 수": int(가족구성),
                 "자녀수_구간": str(자녀구간),
                 "차량 소유 여부": int(차량),
