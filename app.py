@@ -853,55 +853,61 @@ with tabs[0]:
         # =========================
         # 2) 등급별 분포 (A~E)
         # =========================
-        st.markdown("### 등급별 고객 비중 & 실제 연체율 (A~E)")
-
+        st.markdown("### 등급별 고객 비중")
         grade_order = ["우대", "안정", "위험", "고위험"]
-        dist_df = kpi["grade_dist"]
-        dr_df   = kpi["dr_by_grade"]
         
+        dist_df = kpi["grade_dist"]   # grade, count, share(%)
         share_map = dict(zip(dist_df["grade"], dist_df["share"]))
-        dr_map    = dict(zip(dr_df["grade"], dr_df["dr"]))
-        
         share = [share_map.get(g, 0.0) for g in grade_order]
-        dr    = [dr_map.get(g, np.nan) for g in grade_order]
         
         x = np.arange(len(grade_order))
+        fig1, ax = plt.subplots(figsize=(8, 3.6))
         
-        fig, ax1 = plt.subplots(figsize=(8, 4))
+        bar_colors = ["#4C78A8"] * len(grade_order)
+        # 강조하고 싶은 등급이 있으면 예: 고위험만 빨강
+        bar_colors[grade_order.index("고위험")] = "#d62728"
         
-        bar_colors = ["#d62728"] + ["#4C78A8"] * 4
-        ax1.bar(x, share, color=bar_colors, alpha=0.7, label="고객 비중 (%)")
-        ax1.set_ylabel("고객 비중 (%)")
-        ax1.set_xticks(x)
-        ax1.set_xticklabels(grade_order)
-        ax1.set_ylim(0, (max(share) * 1.2) if max(share) > 0 else 1)
+        ax.bar(x, share, color=bar_colors, alpha=0.8)
+        ax.set_xticks(x)
+        ax.set_xticklabels(grade_order)
+        ax.set_ylabel("고객 비중 (%)")
+        ax.set_ylim(0, max(share) * 1.25 if max(share) > 0 else 1)
         
-        ax2 = ax1.twinx()
-        ax2.plot(x, dr, color="#E45756", marker="o", linewidth=2, label="실제 연체율 (%)")
-        ax2.set_ylabel("실제 연체율 (%)")
-        ax2.set_ylim(0, (np.nanmax(dr) * 1.2) if np.isfinite(np.nanmax(dr)) else 1)
+        for i, v in enumerate(share):
+            ax.text(i, v + (max(share)*0.03 if max(share)>0 else 0.1), f"{v:.1f}%", ha="center", va="bottom", fontsize=10)
         
+        st.pyplot(fig1, use_container_width=True)
+        
+        
+        st.markdown("### 등급별 실제 연체율")
+        dr_df = kpi["dr_by_grade"]    # grade, dr(%)
+        dr_map = dict(zip(dr_df["grade"], dr_df["dr"]))
+        dr = [dr_map.get(g, np.nan) for g in grade_order]
+        
+        fig2, ax = plt.subplots(figsize=(8, 3.6))
+        ax.plot(x, dr, color="#E45756", marker="o", linewidth=2)
+        
+        ax.set_xticks(x)
+        ax.set_xticklabels(grade_order)
+        ax.set_ylabel("실제 연체율 (%)")
+        ax.set_ylim(0, (np.nanmax(dr) * 1.25) if np.isfinite(np.nanmax(dr)) else 1)
+        
+        # 값 라벨
+        for i, v in enumerate(dr):
+            if np.isnan(v):
+                continue
+            ax.text(i, v + (np.nanmax(dr)*0.03 if np.isfinite(np.nanmax(dr)) else 0.1), f"{v:.1f}%", ha="center", va="bottom", fontsize=10)
+        
+        # 전체 평균 기준선(있을 때만)
         overall = kpi.get("overall_dr", np.nan)  # 0~1
         if not np.isnan(overall):
             y = overall * 100
-            ax2.axhline(y, color="gray", linestyle="--", linewidth=1.5, label="전체 평균 연체율")
-            ax1.text(
-                0.02, 0.95,
-                f"전체 평균 연체율: {y:.2f}%",
-                transform=ax1.transAxes,
-                ha="left", va="top",
-                fontsize=11,
-                bbox=dict(facecolor="white", edgecolor="gray", alpha=0.9)
-            )
+            ax.axhline(y, color="gray", linestyle="--", linewidth=1.5)
+            ax.text(0.02, 0.92, f"전체 평균 연체율: {y:.2f}%", transform=ax.transAxes,
+                    ha="left", va="top", fontsize=11,
+                    bbox=dict(facecolor="white", edgecolor="gray", alpha=0.9))
         
-        h1, l1 = ax1.get_legend_handles_labels()
-        h2, l2 = ax2.get_legend_handles_labels()
-        ax1.legend(h1 + h2, l1 + l2, loc="upper right", frameon=True)
-        
-        st.pyplot(fig, use_container_width=True)
-
-    except Exception as e:
-        st.warning(f"샘플 KPI를 계산하지 못했습니다: {e}")
+        st.pyplot(fig2, use_container_width=True)
 
     # =========================
     # 3) 성능지표는 보조로만(작게)
