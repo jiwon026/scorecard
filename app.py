@@ -938,7 +938,7 @@ with tabs[0]:
     a, b, c, d = st.columns(4)
     
     with a:
-        st.markdown("#### 🟢 우대 (670점 이상)")
+        st.markdown("#### 🟢 우대  \n<small>Score ≥ 670</small>", unsafe_allow_html=True)
         st.markdown(
             "- 정상 유지\n"
             "- 우량 고객 프로모션\n"
@@ -947,7 +947,7 @@ with tabs[0]:
         )
     
     with b:
-        st.markdown("#### 🔵 안정 (600~669)")
+        st.markdown("#### 🔵 안정  \n<small>Score ≥ 670</small>", unsafe_allow_html=True)
         st.markdown(
             "- 정기 모니터링\n"
             "- 자동이체 유지 안내\n"
@@ -956,7 +956,7 @@ with tabs[0]:
         )
     
     with c:
-        st.markdown("#### 🟠 위험 (550~599)")
+        st.markdown("#### 🟠 위험 \n<small>600 ≤ Score ≤ 669</small>", unsafe_allow_html=True)
         st.markdown(
             "- 모니터링 강화\n"
             "- 자동이체/분할납부 유도\n"
@@ -965,7 +965,7 @@ with tabs[0]:
         )
     
     with d:
-        st.markdown("#### 🔴 고위험 (549점 이하)")
+        st.markdown("#### 🔴 고위험  \n<small>Score ≤ 549</small>", unsafe_allow_html=True)
         st.markdown(
             "- 한도/결제조건 조정\n"
             "- 사전 안내·콜센터 아웃바운드\n"
