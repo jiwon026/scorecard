@@ -735,7 +735,7 @@ with tabs[0]:
         
         # ---- 선 (연체율) ----
         ax2 = ax1.twinx()
-        ax2.plot(x, dr, color="#E45756", marker="o", linewidth=2)
+        ax2.plot(x, dr, color="#E45756", marker="o", linewidth=2, label="실제 연체율 (%)")  # ✅ label 추가
         ax2.set_ylabel("실제 연체율 (%)")
         ax2.set_ylim(0, max(dr) * 1.2)
         
@@ -743,9 +743,9 @@ with tabs[0]:
         overall = kpi.get("overall_dr", np.nan)
         if not np.isnan(overall):
             y = overall * 100
-            ax2.axhline(y, color="gray", linestyle="--", linewidth=1.5)
+            ax2.axhline(y, color="gray", linestyle="--", linewidth=1.5, label="전체 평균 연체율")  # ✅ label 추가
         
-            # 🔥 왼쪽 내부에 배치
+            # 왼쪽 상단 박스(현재 유지)
             ax1.text(
                 0.02, 0.95,
                 f"전체 평균 연체율: {y:.2f}%",
