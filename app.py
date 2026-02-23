@@ -202,73 +202,57 @@ def _to_int(s: str):
 
 
 def match_numeric_label(x: float, labels):
-    """
-    labels: ["23세 이하", "24세 ~ 30세", "19년 이상", "9~14년", "5, 6년", "0.03 이하" ...]
-    가능한 범위 패턴들을 파싱해 x가 들어가는 label 반환
-    """
     if x is None or (isinstance(x, float) and np.isnan(x)):
         return None
 
-    # 우선: '이하', '이상', 'A ~ B', 'A~B', 'A, B'
+    NUM_RE = r"\d+(?:\.\d+)?"
+    def _nums(text: str):
+        return re.findall(NUM_RE, str(text))
+
     for lab in labels:
         t = str(lab).strip()
 
-        # "23세 이하" / "12,744,000원 이하"
+        # "23세 이하"
         if "이하" in t and "~" not in t and "," not in t:
-            a = _to_int(t) if any(ch.isdigit() for ch in t) and ("원" in t) else None
+            a = _to_int(t) if ("원" in t) else None
             if a is None:
-                # "23세 이하" 같은 경우
-                nums = re.findall(r"\d+(\.\d+)?", t)
+                nums = _nums(t)
                 if nums:
                     a = float(nums[0])
             if a is not None and x <= a:
                 return lab
 
-        # "100,890,001원 이상" / "19년 이상"
+        # "19년 이상"
         if "이상" in t and "~" not in t and "," not in t:
             a = _to_int(t) if ("원" in t) else None
             if a is None:
-                nums = re.findall(r"\d+(\.\d+)?", t)
+                nums = _nums(t)
                 if nums:
                     a = float(nums[0])
             if a is not None and x >= a:
                 return lab
 
-        # "24세 ~ 30세", "12,744,001 ~ 37,170,000원 이하"
+        # "24세 ~ 30세"
         if "~" in t:
             parts = [p.strip() for p in t.split("~")]
             if len(parts) >= 2:
                 lo_s, hi_s = parts[0], parts[1]
                 lo = _to_int(lo_s) if ("원" in t) else None
                 hi = _to_int(hi_s) if ("원" in t) else None
+
                 if lo is None:
-                    nums = re.findall(r"\d+(\.\d+)?", lo_s)
+                    nums = _nums(lo_s)
                     lo = float(nums[0]) if nums else None
                 if hi is None:
-                    nums = re.findall(r"\d+(\.\d+)?", hi_s)
+                    nums = _nums(hi_s)
                     hi = float(nums[0]) if nums else None
 
-                if lo is not None and hi is not None:
-                    # "이하"가 있으면 upper inclusive
-                    if "이하" in t:
-                        if lo <= x <= hi:
-                            return lab
-                    else:
-                        if lo <= x <= hi:
-                            return lab
-
-        # "9~14년" (tilde without spaces)
-        if re.search(r"\d+\s*~\s*\d+", t):
-            nums = re.findall(r"\d+(\.\d+)?", t)
-            if len(nums) >= 2:
-                lo = float(nums[0])
-                hi = float(nums[1])
-                if lo <= x <= hi:
+                if lo is not None and hi is not None and lo <= x <= hi:
                     return lab
 
-        # "5, 6년" 같은 나열
+        # "5, 6년"
         if "," in t and "~" not in t:
-            nums = re.findall(r"\d+(\.\d+)?", t)
+            nums = _nums(t)
             if nums:
                 vals = set(float(n) for n in nums)
                 if float(x) in vals:
