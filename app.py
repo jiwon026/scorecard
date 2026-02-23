@@ -659,6 +659,7 @@ tabs = st.tabs([
     "② 고객정보 입력(데모)",
     "③ Explain (Reason Codes)",
     "④ WOE/Points Insights",
+    "⑤ Segment 분석(리스크 원인)",
 ])
 
 # ---- Overview
@@ -943,6 +944,155 @@ with tabs[3]:
         st.dataframe(bin_df.head(30), use_container_width=True)
         st.write("Flag sheet preview")
         st.dataframe(flag_df.head(30), use_container_width=True)
+
+# ---- Segment 분석(리스크 원인)
+with tabs[4]:
+    st.subheader("세그먼트별 리스크 분석")
+    st.caption("어디에서 리스크가 발생하는지(어떤 고객군이 위험한지)를 찾는 화면입니다. 샘플 데이터 기준입니다.")
+
+    base_dir = Path(__file__).resolve().parent
+    art_dir = base_dir / "artifacts"
+
+    # 샘플 로드
+    try:
+        df = load_sample_df(art_dir).copy()
+    except Exception as e:
+        st.error(f"샘플 데이터를 불러오지 못했습니다: {e}")
+        st.stop()
+
+    # --- PD 계산(캐시)
+    @st.cache_data(show_spinner=False)
+    def attach_pd(df: pd.DataFrame,
+                  meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map) -> pd.DataFrame:
+        records = df.to_dict("records")
+        probas = np.empty(len(records), dtype=float)
+        for i, r in enumerate(records):
+            _, p = score_one_fast(r, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map)
+            probas[i] = p
+        out = df.copy()
+        out["PD"] = probas
+        return out
+
+    df2 = attach_pd(df, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map)
+
+    has_target = "TARGET" in df2.columns
+    if has_target:
+        df2["TARGET"] = df2["TARGET"].astype(int)
+
+    overall_pd = float(df2["PD"].mean())
+    overall_dr = float(df2["TARGET"].mean()) if has_target else np.nan
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("전체 평균 PD", f"{overall_pd*100:.2f}%")
+    if has_target:
+        c2.metric("전체 실제 연체율", f"{overall_dr*100:.2f}%")
+        c3.metric("샘플 수", f"{len(df2):,}")
+    else:
+        c2.metric("샘플 수", f"{len(df2):,}")
+        c3.metric("TARGET", "없음(Observed DR 미표시)")
+
+    st.divider()
+
+    # -------------------------
+    # 1) 분석 변수 선택
+    # -------------------------
+    # 데이터에 있는 컬럼만 자동 노출
+    candidate_vars = [
+        "연간 수입", "연간수입", "소득", "소득구간",
+        "산업군_상위", "산업군",
+        "근속연수", "근속연수(년)",
+        "나이",
+        "직업",
+        "최종 학력", "수입 유형", "주거 형태"
+    ]
+    available_vars = [v for v in candidate_vars if v in df2.columns]
+    if not available_vars:
+        st.warning("세그먼트 분석에 사용할 컬럼이 샘플 데이터에 없습니다. (예: '산업군_상위', '연간 수입', '근속연수', '나이')")
+        st.stop()
+
+    seg_var = st.selectbox("세그먼트 기준 선택", available_vars, index=0)
+
+    # 숫자형이면 자동 구간화 옵션 제공
+    is_numeric = pd.api.types.is_numeric_dtype(df2[seg_var])
+
+    colA, colB = st.columns([1, 1])
+    with colA:
+        top_n = st.slider("표시할 세그먼트 수(상위 N)", 5, 30, 15, 1)
+
+    with colB:
+        if is_numeric:
+            bins = st.slider("구간 개수(숫자형일 때)", 3, 10, 5, 1)
+        else:
+            bins = None
+
+    # -------------------------
+    # 2) 집계
+    # -------------------------
+    tmp = df2.copy()
+
+    if is_numeric:
+        # 결측 처리
+        tmp = tmp[~tmp[seg_var].isna()].copy()
+        # qcut: 분위수 기반으로 비슷한 크기로 구간화
+        tmp["SEG"] = pd.qcut(tmp[seg_var], q=bins, duplicates="drop")
+    else:
+        tmp["SEG"] = tmp[seg_var].astype(str).fillna("Unknown")
+
+    agg = tmp.groupby("SEG").agg(
+        고객수=("PD", "size"),
+        평균PD=("PD", "mean"),
+    ).reset_index()
+
+    if has_target:
+        agg["실제연체율"] = tmp.groupby("SEG")["TARGET"].mean().values
+        agg["Lift(연체율/전체)"] = agg["실제연체율"] / (overall_dr if overall_dr > 0 else np.nan)
+
+    # 고객수 많은 순으로 보기 + 상위 N
+    agg = agg.sort_values("고객수", ascending=False).head(top_n)
+
+    # 보기 좋게 포맷
+    show = agg.copy()
+    show["평균PD(%)"] = (show["평균PD"] * 100).round(2)
+    show = show.drop(columns=["평균PD"])
+
+    if has_target:
+        show["실제연체율(%)"] = (show["실제연체율"] * 100).round(2)
+        show["Lift"] = show["Lift(연체율/전체)"].round(2)
+        show = show.drop(columns=["실제연체율", "Lift(연체율/전체)"])
+
+    st.markdown("### 세그먼트별 요약")
+    st.dataframe(show, use_container_width=True)
+
+    # -------------------------
+    # 3) 시각화 (선택)
+    # -------------------------
+    st.markdown("### 시각화")
+    # 간단하게: 평균PD 막대 / (있으면) 실제연체율 선
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    labels = show["SEG"].astype(str).tolist()
+    pd_vals = show["평균PD(%)"].values
+
+    fig, ax1 = plt.subplots(figsize=(9, 4))
+    ax1.bar(np.arange(len(labels)), pd_vals)
+    ax1.set_xticks(np.arange(len(labels)))
+    ax1.set_xticklabels(labels, rotation=20, ha="right")
+    ax1.set_ylabel("평균 PD (%)")
+
+    if has_target:
+        dr_vals = show["실제연체율(%)"].values
+        ax2 = ax1.twinx()
+        ax2.plot(np.arange(len(labels)), dr_vals, marker="o")
+        ax2.set_ylabel("실제 연체율 (%)")
+
+        # 전체 연체율 기준선
+        ax2.axhline(overall_dr * 100, linestyle="--")
+        ax2.text(0, overall_dr * 100, f"전체 {overall_dr*100:.2f}%", va="bottom")
+
+    st.pyplot(fig, use_container_width=True)
+
+    st.caption("Tip: 운영팀/리스크팀은 'Lift'가 높은 세그먼트를 우선적으로 관리 대상으로 삼는 경우가 많습니다.")
 
 st.divider()
 st.caption("발표 흐름 추천: ①Overview(정책+설명가능) → ②데모(입력→등급) → ③Reason Codes(왜 High인지) → ④Insights(직업×산업군 점수 테이블).")
