@@ -773,18 +773,37 @@ with tabs[0]:
     # 4) 운영 정책 예시
     # =========================
     st.divider()
-    st.markdown("### 🎯 운영 정책 예시 (Risk Grade Action)")
-
-    a, b, c = st.columns(3)
-    with a:
-        st.markdown("#### 🔴 High (예: A~B)")
-        st.markdown("- 한도/결제조건 조정\n- 사전 안내·콜센터\n- 연체예방 캠페인/리마인드")
-    with b:
-        st.markdown("#### 🟠 Mid (예: C)")
-        st.markdown("- 모니터링 강화\n- 자동이체/분할납부 유도\n- 행동기반 알림")
-    with c:
-        st.markdown("#### 🟢 Low (예: D~E)")
-        st.markdown("- 정상 유지\n- 우량 고객 프로모션\n- 과도 제약 최소화")
+    st.markdown("### 🎯 권장 운영 정책")
+    
+    if "last_result" in st.session_state:
+        _, _, grade = st.session_state["last_result"]
+    
+        if grade == "High":
+            st.error(
+                "🔴 **High 등급 고객 권장 액션**\n\n"
+                "- 한도/결제조건 조정\n"
+                "- 사전 안내·콜센터\n"
+                "- 연체예방 캠페인/리마인드"
+            )
+    
+        elif grade == "Mid":
+            st.warning(
+                "🟠 **Mid 등급 고객 권장 액션**\n\n"
+                "- 모니터링 강화\n"
+                "- 자동이체/분할납부 유도\n"
+                "- 행동기반 알림"
+            )
+    
+        else:
+            st.success(
+                "🟢 **Low 등급 고객 권장 액션**\n\n"
+                "- 정상 유지\n"
+                "- 우량 고객 프로모션\n"
+                "- 과도 제약 최소화"
+            )
+    
+    else:
+        st.info("고객 정보를 입력하고 등급을 산출하면, 권장 정책이 자동으로 표시됩니다.")
 
 # ---- 고객 입력 & Explain
 with tabs[1]:
@@ -894,6 +913,17 @@ with tabs[1]:
             st.metric("연체확률(PD)", f"{proba:.3f}")
             st.metric("등급", grade)
             st.progress(min(max(proba, 0.0), 1.0))
+            # right column 결과 표시 부분 내부(grade가 있을 때)
+            title, items, box = policy_reco_by_grade(grade)
+            
+            msg = "\n".join([f"- {x}" for x in items])
+            
+            if box == "error":
+                st.error(f"**{title}**\n\n{msg}")
+            elif box == "warning":
+                st.warning(f"**{title}**\n\n{msg}")
+            else:
+                st.success(f"**{title}**\n\n{msg}")
 
     # =========================
     # Explain: 같은 탭 아래에 바로 표시
