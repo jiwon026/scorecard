@@ -726,7 +726,7 @@ with tabs[0]:
         
         # ---- 막대 (고객 비중) ----
         bar_colors = ["#d62728"] + ["#4C78A8"] * 4  # A만 강조(빨강), 나머지 파랑
-        bars = ax1.bar(x, share, color=bar_colors, alpha=0.7)
+        bars = ax1.bar(x, share, color=bar_colors, alpha=0.7, label="고객 비중 (%)")
         
         ax1.set_ylabel("고객 비중 (%)")
         ax1.set_xticks(x)
@@ -755,6 +755,12 @@ with tabs[0]:
                 fontsize=11,
                 bbox=dict(facecolor="white", edgecolor="gray", alpha=0.9)
             )
+        
+        # ---- ✅ 범례(legend) 통합 ----
+        h1, l1 = ax1.get_legend_handles_labels()
+        h2, l2 = ax2.get_legend_handles_labels()
+        
+        ax1.legend(h1 + h2, l1 + l2, loc="upper right", frameon=True)
         
         st.pyplot(fig, use_container_width=True)
 
