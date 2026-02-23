@@ -135,10 +135,6 @@ def parse_section_sheet(df: pd.DataFrame):
 
     # points가 하나도 없는 group은 제거(예: 연간수입_woe가 비어있는 경우)
     out = {g: m for g, m in out.items() if len(m) > 0}
-    if "grade_dr" in out:
-        out["dr_by_grade"] = out["grade_dr"]
-    else:
-        out["dr_by_grade"] = pd.DataFrame({"grade": ["A","B","C","D","E"], "dr": [np.nan]*5})
     return out
 
 
@@ -637,7 +633,10 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
     else:
         out["overall_dr"] = np.nan
         out["grade_dr"] = pd.DataFrame({"grade": order, "dr": [np.nan]*5})
-
+    if "grade_dr" in out:
+        out["dr_by_grade"] = out["grade_dr"]
+    else:
+        out["dr_by_grade"] = pd.DataFrame({"grade": ["A","B","C","D","E"], "dr": [np.nan]*5})
     return out
 
 def _upper_from_full_industry(s: str) -> str:
