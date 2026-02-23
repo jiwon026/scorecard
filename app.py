@@ -633,10 +633,8 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
     else:
         out["overall_dr"] = np.nan
         out["grade_dr"] = pd.DataFrame({"grade": order, "dr": [np.nan]*5})
-    if "grade_dr" in out:
-        out["dr_by_grade"] = out["grade_dr"]
-    else:
-        out["dr_by_grade"] = pd.DataFrame({"grade": ["A","B","C","D","E"], "dr": [np.nan]*5})
+
+    out["dr_by_grade"] = out["grade_dr"]                                   
     return out
 
 def _upper_from_full_industry(s: str) -> str:
@@ -809,49 +807,46 @@ with tabs[0]:
 
         grade_order = ["A", "B", "C", "D", "E"]
         
-        share = [kpi["grade_dist"].get(g, 0.0) * 100 for g in grade_order]
-        dr = [kpi["dr_by_grade"].get(g, np.nan) * 100 for g in grade_order]
+        dist_df = kpi["grade_dist"]          # columns: grade, count, share(%)
+        dr_df   = kpi["dr_by_grade"]         # columns: grade, dr(%)
+        
+        share_map = dict(zip(dist_df["grade"], dist_df["share"]))
+        dr_map    = dict(zip(dr_df["grade"], dr_df["dr"]))
+        
+        share = [share_map.get(g, 0.0) for g in grade_order]      # 이미 %
+        dr    = [dr_map.get(g, np.nan) for g in grade_order]      # 이미 %
         
         x = np.arange(len(grade_order))
         
         fig, ax1 = plt.subplots(figsize=(8, 4))
         
-        # ---- 막대 (고객 비중) ----
-        bar_colors = ["#d62728"] + ["#4C78A8"] * 4  # A만 강조(빨강), 나머지 파랑
-        bars = ax1.bar(x, share, color=bar_colors, alpha=0.7, label="고객 비중 (%)")
-        
+        bar_colors = ["#d62728"] + ["#4C78A8"] * 4
+        ax1.bar(x, share, color=bar_colors, alpha=0.7, label="고객 비중 (%)")
         ax1.set_ylabel("고객 비중 (%)")
         ax1.set_xticks(x)
         ax1.set_xticklabels(grade_order)
-        ax1.set_ylim(0, max(share) * 1.2)
+        ax1.set_ylim(0, (max(share) * 1.2) if max(share) > 0 else 1)
         
-        # ---- 선 (연체율) ----
         ax2 = ax1.twinx()
-        ax2.plot(x, dr, color="#E45756", marker="o", linewidth=2, label="실제 연체율 (%)")  # ✅ label 추가
+        ax2.plot(x, dr, color="#E45756", marker="o", linewidth=2, label="실제 연체율 (%)")
         ax2.set_ylabel("실제 연체율 (%)")
-        ax2.set_ylim(0, max(dr) * 1.2)
+        ax2.set_ylim(0, (np.nanmax(dr) * 1.2) if np.isfinite(np.nanmax(dr)) else 1)
         
-        # ---- 전체 평균 기준선 ----
-        overall = kpi.get("overall_dr", np.nan)
+        overall = kpi.get("overall_dr", np.nan)  # 0~1
         if not np.isnan(overall):
             y = overall * 100
-            ax2.axhline(y, color="gray", linestyle="--", linewidth=1.5, label="전체 평균 연체율")  # ✅ label 추가
-        
-            # 왼쪽 상단 박스(현재 유지)
+            ax2.axhline(y, color="gray", linestyle="--", linewidth=1.5, label="전체 평균 연체율")
             ax1.text(
                 0.02, 0.95,
                 f"전체 평균 연체율: {y:.2f}%",
                 transform=ax1.transAxes,
-                ha="left",
-                va="top",
+                ha="left", va="top",
                 fontsize=11,
                 bbox=dict(facecolor="white", edgecolor="gray", alpha=0.9)
             )
         
-        # ---- ✅ 범례(legend) 통합 ----
         h1, l1 = ax1.get_legend_handles_labels()
         h2, l2 = ax2.get_legend_handles_labels()
-        
         ax1.legend(h1 + h2, l1 + l2, loc="upper right", frameon=True)
         
         st.pyplot(fig, use_container_width=True)
