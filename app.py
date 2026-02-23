@@ -73,7 +73,9 @@ def load_scorecard_excel(_version: str = "v1"):
     offset = float(meta["offset"])
     base_points = float(offset - factor * intercept)
 
-    cont  = xls.parse("scorecard_cont")      # feature/points (섹션형)
+    cont = xls.parse("scorecard_cont")
+    if "feature" not in cont.columns and "bin" in cont.columns:
+        cont = cont.rename(columns={"bin": "feature"})      # feature/points (섹션형)
     cat   = xls.parse("scorecard_cat")       # feature/points (섹션형)
     cross = xls.parse("scorecard_cross")     # feature/points (섹션형)
 
