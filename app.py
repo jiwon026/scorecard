@@ -849,8 +849,7 @@ with tabs[0]:
         k4.metric("고위험군 평균 PD", f"{high_avg_pd*100:.2f}%" if high_avg_pd is not None and not np.isnan(high_avg_pd) else "-")
 
         st.caption("※ 위 KPI는 전체 데이터가 아닌 샘플(랜덤 추출) 기준으로 산출되었습니다.")
-    except Exception as e:
-        st.warning(f"샘플 KPI를 계산하지 못했습니다: {e}")
+
 
         # =========================
         # 2) 등급별 분포
@@ -910,7 +909,8 @@ with tabs[0]:
                     bbox=dict(facecolor="white", edgecolor="gray", alpha=0.9))
         
         st.pyplot(fig2, use_container_width=True)
-
+    except Exception as e:
+            st.warning(f"샘플 KPI를 계산하지 못했습니다: {e}")
     # =========================
     # 3) 성능지표는 보조로만(작게)
     # =========================
