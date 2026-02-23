@@ -849,9 +849,11 @@ with tabs[0]:
         k4.metric("고위험군 평균 PD", f"{high_avg_pd*100:.2f}%" if high_avg_pd is not None and not np.isnan(high_avg_pd) else "-")
 
         st.caption("※ 위 KPI는 전체 데이터가 아닌 샘플(랜덤 추출) 기준으로 산출되었습니다.")
+    except Exception as e:
+        st.warning(f"샘플 KPI를 계산하지 못했습니다: {e}")
 
         # =========================
-        # 2) 등급별 분포 (A~E)
+        # 2) 등급별 분포
         # =========================
         st.markdown("### 등급별 고객 비중")
         grade_order = ["우대", "안정", "위험", "고위험"]
