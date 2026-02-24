@@ -1419,16 +1419,18 @@ with tabs[2]:
         )
 
         # ✅ NaN은 검게 보이거나 이상해질 수 있으니 표시/색상 처리
-        grade_order = ["우대","안정","위험","고위험"]
+        # 컬럼 순서 고정
+        grade_order = ["우대", "안정", "위험", "고위험"]
         piv = piv.reindex(columns=grade_order)
         piv = piv.sort_index()
-
-        # 표본 너무 적은 칸은 NaN으로 남겨두고(=데이터 부족), 표시만 깔끔하게
+        
+        # Heatmap 스타일
         sty = (
             piv.style
-              .background_gradient(cmap="Reds", axis=None)
-              .format(lambda v: "" if pd.isna(v) else f"{v:.2f}")
+                .background_gradient(cmap="Reds", axis=None)
+                .format(lambda v: "" if pd.isna(v) else f"{v:.2f}")
         )
+        
         st.dataframe(sty, use_container_width=True)
         st.caption("값은 산업군×등급별 실제 연체율(%)입니다. 빈 칸은 표본 부족/결측으로 계산 불가한 경우입니다.")
 
