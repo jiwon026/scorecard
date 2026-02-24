@@ -1049,10 +1049,10 @@ with tabs[0]:
                 lift = (high_rate / overall_rate) if overall_rate > 0 else np.nan
         
                 rows.append({
-                    "변수": col,
-                    "고위험군 최빈값": high_val,
-                    "고위험군 비중(%)": high_rate * 100,
-                    "전체 비중(%)": overall_rate * 100,
+                    "구분 기준": col,
+                    "대표 특성": high_val,
+                    "구성 비율(%)": high_rate * 100,
+                    "전체 비율(%)": overall_rate * 100,
                     "Lift": lift
                 })
         
