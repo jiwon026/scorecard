@@ -846,14 +846,6 @@ bin_map   = build_value_points_map(bin_df)
 flag_map  = build_value_points_map(flag_df)
 job_ind_map = build_job_ind_map(job_ind_df)
 
-# 주거 형태 옵션을 scorecard_cat(=cat_map)에서 그대로 가져오기
-housing_feat = "주거 형태_woe"
-housing_options = list(cat_map.get(housing_feat, {}).keys())
-
-# 혹시 비어있으면(예외) fallback
-if not housing_options:
-    housing_options = ["주택 / 아파트", "아파트 임대", "오피스텔", "공공분양", "기타"]
-
 
 
 tabs = st.tabs([
@@ -1140,10 +1132,17 @@ with tabs[1]:
     if not sample_path.exists():
         sample_path = art_dir / "sample_scoring.csv"
     
-    industry_upper_options, upper_to_rep_full = \
-        build_upper_industry_options_and_rep(job_ind_df, sample_path)
+    industry_upper_options, upper_to_rep_full = build_upper_industry_options_and_rep(job_ind_df, sample_path)
     st.subheader("고객정보 입력 → 점수/확률/등급 산출")
     st.caption("입력 Tip!\n - 산업군은 '상위 산업군'만 선택합니다. (무역/산업/운송은 제외)")
+
+    # 주거 형태 옵션을 scorecard_cat(=cat_map)에서 그대로 가져오기
+    housing_feat = "주거 형태_woe"
+    housing_options = list(cat_map.get(housing_feat, {}).keys())
+    
+    # 혹시 비어있으면(예외) fallback
+    if not housing_options:
+        housing_options = ["주택 / 아파트", "아파트 임대", "오피스텔", "공공분양", "기타"]
 
     left, right = st.columns([1.15, 1])
     
