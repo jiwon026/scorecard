@@ -1239,7 +1239,8 @@ with tabs[1]:
             # 기타 입력(스코어카드에 쓰일 수 있음)
             수입유형 = st.selectbox("수입 유형", ["근로자", "공무원", "연금수령자", "기타"])
             학력 = st.selectbox("최종 학력", ["저학력자", "고등학교 졸업", "대학교 중퇴", "대학교 졸업 이상"])
-            주거 = st.selectbox("주거 형태", ["주택 / 아파트", "아파트 임대", "기타"])
+            default_idx = housing_options.index("주택 / 아파트") if "주택 / 아파트" in housing_options else 0
+            주거 = st.selectbox("주거 형태", housing_options, index=default_idx)
             가족구성 = st.number_input("가족 구성원 수", 1, 10, 2, step=1)
             자녀구간 = st.selectbox("자녀 수", ["0", "1", "2", "3+"])
 
