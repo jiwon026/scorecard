@@ -1370,7 +1370,9 @@ with tabs[2]:
     st.markdown("### 2) 변수별 위험 집중도(Lift) — 고위험군 대표 특징")
 
     # 후보 컬럼: 너희 샘플 컬럼에 맞춰 조정
-    default_cols = [c for c in ["수입 유형", "최종 학력", "직업", "산업군_상위", "주거 형태", "차량 소유 여부", "부동산 소유 여부"] if c in df_sc.columns]
+    default_cols = [c for c in ["수입 유형", "최종 학력", "결혼 여부", "주거 형태", "자녀수_구간", "산업군_상위",
+                                "성별", "가족 구성원 수", "업무용 휴대전화 소유 여부", "차량 소유 여부", "부동산 소유 여부",
+                                "한부모 가정", "나이", "근속연수", "가입연수", "연간 수입", "거주지 인구 비율"] if c in df_sc.columns]
     candidate_cols = st.multiselect("분석할 변수 선택", options=list(df_sc.columns), default=default_cols)
 
     rows = []
