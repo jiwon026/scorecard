@@ -1529,7 +1529,7 @@ with tabs[2]:
     ]
     default_cols = [c for c in default_cols if c in df_sc.columns]
     
-    cols = st.multiselect("비교할 변수 선택", options=list(df_sc.columns), default=default_cols)
+    cols = st.select("비교할 변수 선택", options=list(df_sc.columns), default=default_cols)
     
     for col in cols:
         if col in ["TARGET", "score", "proba", "grade4"]:
