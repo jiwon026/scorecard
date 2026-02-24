@@ -1420,15 +1420,24 @@ with tabs[2]:
 
         # ✅ NaN은 검게 보이거나 이상해질 수 있으니 표시/색상 처리
         # 컬럼 순서 고정
-        grade_order = ["우대", "안정", "위험", "고위험"]
-        piv = piv.reindex(columns=grade_order)
-        piv = piv.sort_index()
+        grade_order = ["우대","안정","위험","고위험"]
+        piv = piv.reindex(columns=grade_order).sort_index()
+        
+        # 1) 'None' 같은 문자열/값을 NaN으로 정리
+        piv = piv.replace(["None", "none", "NULL", "null", ""], np.nan)
+        
+        # 2) 숫자로 강제 변환 (못 바꾸는 건 NaN)
         piv = piv.apply(pd.to_numeric, errors="coerce")
-
+        
+        # 3) 스타일: NaN은 회색 + 숫자만 그라데이션
+        def na_gray(v):
+            return "background-color: #f2f2f2; color: #666;" if pd.isna(v) else ""
+        
         sty = (
             piv.style
-                .background_gradient(cmap="Reds", axis=None)
-                .format(lambda v: "" if pd.isna(v) else f"{v:.2f}")
+              .applymap(na_gray)  # ✅ 결측칸은 회색 처리
+              .background_gradient(cmap="Reds", axis=None)  # ✅ 숫자만 히트맵
+              .format("{:.2f}", na_rep="")  # ✅ NaN은 빈칸으로 표시
         )
         
         st.dataframe(sty, use_container_width=True)
