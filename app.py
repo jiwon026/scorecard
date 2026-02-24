@@ -1355,13 +1355,17 @@ with tabs[2]:
 
     # 실제 연체율(타겟 있을 때)
     if "TARGET" in df_sc.columns:
-        overall_dr = df_sc["TARGET"].mean() * 100
-        seg_dr = df_seg["TARGET"].mean() * 100 if len(df_seg) else np.nan
-        k4.metric("상위 위험군 실제 연체율", f"{seg_dr:.2f}%")
-        st.caption(f"전체 평균 연체율: {overall_dr:.2f}%")
-    else:
-        k4.metric("상위 위험군 실제 연체율", "-")
-        st.caption("※ 샘플 데이터에 TARGET이 없어서 ‘실제 연체율’은 표시하지 않습니다.")
+        overall_dr = df_sc["TARGET"].mean()
+        seg_dr = df_seg["TARGET"].mean()
+    
+        lift = seg_dr / overall_dr if overall_dr > 0 else np.nan
+    
+        k1, k2, k3, k4 = st.columns(4)
+    
+        k1.metric("전체 평균 연체율", f"{overall_dr*100:.2f}%")
+        k2.metric("상위 위험군 연체율", f"{seg_dr*100:.2f}%")
+        k3.metric("위험 배율(Lift)", f"{lift:.2f}배")
+        k4.metric("상위 위험군 비중", f"{len(df_seg)/len(df_sc)*100:.1f}%")
 
     st.divider()
 
