@@ -660,31 +660,18 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
     # -------------------------
     # 5) TARGET 있으면 실제 연체율/리프트
     # -------------------------
-    if "TARGET" in df.columns:
-        y = pd.to_numeric(df["TARGET"], errors="coerce").fillna(0).astype(int).values
-        overall_dr = float(y.mean()) if len(y) else np.nan
-        out["overall_dr"] = overall_dr  # 0~1
-
-        dr_rows = []
-        lift_rows = []
-
-        for g in grade_order:
-            m = (grade4 == g)
-            dr = float(y[m].mean()) if np.any(m) else np.nan          # 0~1
-            dr_pct = dr * 100.0 if not np.isnan(dr) else np.nan      # %
-            lift = (dr / overall_dr) if (not np.isnan(dr) and not np.isnan(overall_dr) and overall_dr > 0) else np.nan
-
-            dr_rows.append({"grade": g, "dr": dr_pct})
-            lift_rows.append({"grade": g, "lift": lift})
-
-        out["dr_by_grade"] = pd.DataFrame(dr_rows)         # grade, dr(%)
-        out["lift_by_grade"] = pd.DataFrame(lift_rows)     # grade, lift
-    else:
-        out["overall_dr"] = np.nan
-        out["dr_by_grade"] = pd.DataFrame({"grade": grade_order, "dr": [np.nan]*len(grade_order)})
-        out["lift_by_grade"] = pd.DataFrame({"grade": grade_order, "lift": [np.nan]*len(grade_order)})
-
-    return out
+    if "TARGET" in df_sc.columns:
+        overall_dr = df_sc["TARGET"].mean()
+        seg_dr = df_seg["TARGET"].mean()
+    
+        lift = seg_dr / overall_dr if overall_dr > 0 else np.nan
+    
+        k1, k2, k3, k4 = st.columns(4)
+    
+        k1.metric("전체 평균 연체율", f"{overall_dr*100:.2f}%")
+        k2.metric("상위 위험군 연체율", f"{seg_dr*100:.2f}%")
+        k3.metric("위험 배율(Lift)", f"{lift:.2f}배")
+        k4.metric("상위 위험군 비중", f"{len(df_seg)/len(df_sc)*100:.1f}%")
 
 def _upper_from_full_industry(s: str) -> str:
     s = str(s).strip()
@@ -1424,39 +1411,7 @@ with tabs[2]:
     st.divider()
 
     # -------------------------
-    # C) SHAP 기반 Top driver (대체: 점수카드 기반 Driver)
-    # -------------------------
-    st.markdown("### 3) Top Driver (Scorecard 기반)")
-
-    st.info("※ 현재 앱에는 SHAP 파일이 연결되어 있지 않아서, 대신 ‘점수카드(points)’ 기준으로 상위 위험군에서 점수를 가장 많이 깎는 요인을 집계합니다.")
-
-    # 상위 위험군에서 n명만 샘플링해서 breakdown 계산(너무 크면 느려짐)
-    n_driver = st.slider("Driver 집계 샘플 수", 200, 2000, 500, 100)
-    df_tmp = df_seg.sample(min(n_driver, len(df_seg)), random_state=42) if len(df_seg) else df_seg
-
-    if len(df_tmp) == 0:
-        st.warning("상위 위험군 표본이 없어서 Driver를 계산할 수 없어요.")
-    else:
-        # breakdown 합산
-        agg = {}
-        for r in df_tmp.to_dict("records"):
-            _, _, _, bd = score_one(r, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map)
-            # points가 음수일수록 위험 요인(점수 감소)
-            for _, row in bd.iterrows():
-                f = str(row["feature"])
-                p = float(row["points"])
-                agg[f] = agg.get(f, 0.0) + p
-
-        drv = (pd.DataFrame({"feature": list(agg.keys()), "total_points": list(agg.values())})
-               .sort_values("total_points")
-               .head(10))
-        st.dataframe(drv, use_container_width=True)
-        st.caption("total_points가 더 음수일수록 상위 위험군에서 ‘점수 감소 기여’가 큰 요인입니다. (SHAP의 방향성과 유사한 운영 설명용 지표)")
-
-    st.divider()
-
-    # -------------------------
-    # D) 산업군별 연체율 Heatmap (표 스타일링)
+    # C) 산업군별 연체율 Heatmap (표 스타일링)
     # -------------------------
     st.markdown("### 4) 산업군별 연체율 Heatmap")
 
@@ -1467,20 +1422,21 @@ with tabs[2]:
     else:
         # 산업군_상위 x grade4 연체율(%)
         piv = (
-            df_sc.pivot_table(
-                index="산업군_상위",
-                columns="grade4",
-                values="TARGET",
-                aggfunc="mean"
-            ) * 100
+            df_sc[df_sc["grade4"] == "고위험"]
+            .groupby("산업군_상위")["TARGET"]
+            .mean()
+            .mul(100)
+            .round(2)
+            .to_frame("고위험 연체율(%)")
         ).round(2)
 
         # 보기 좋게 컬럼 순서 고정
         col_order = [c for c in ["우대", "안정", "위험", "고위험"] if c in piv.columns]
         piv = piv[col_order].sort_index()
+        piv = piv.fillna(0)
 
         st.dataframe(
-            piv.style.background_gradient(axis=None),
+            piv.style.background_gradient(cmap="Reds"),
             use_container_width=True
         )
         st.caption("값은 산업군별·등급별 ‘실제 연체율(%)’입니다. 색이 진할수록 연체율이 높습니다.")
