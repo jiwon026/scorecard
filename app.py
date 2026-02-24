@@ -748,13 +748,14 @@ def enrich_with_score(df: pd.DataFrame,
     if "TARGET" in df2.columns:
         df2["TARGET"] = pd.to_numeric(df2["TARGET"], errors="coerce").fillna(0).astype(int)
 
-    return df2
-
     if "배우자유무" in df2.columns and "자녀수_구간" in df2.columns:
         child_bucket = df2["자녀수_구간"].astype(str).str.strip()
         child_n = child_bucket.replace({"3+": "3"}).astype(float).fillna(0)
         spouse = pd.to_numeric(df2["배우자유무"], errors="coerce").fillna(1)
         df2["한부모 가정"] = ((spouse == 0) & (child_n > 0)).astype(int)
+        
+    return df2
+
 
 def compute_lift_table(df_all: pd.DataFrame, df_seg: pd.DataFrame, col: str):
     """
@@ -1535,7 +1536,7 @@ with tabs[2]:
     st.markdown("### 3) 연체율 상위 그룹 변수 분포 (전체 vs 상위 위험군)")
     col = st.selectbox("비교할 변수 선택", options=allowed_cols, index=0)
     
-    for col in cols:
+    for col in candidate_cols:
         if col in ["TARGET", "score", "proba", "grade4"]:
             continue
         fig = plot_dist_overall_vs_seg(df_sc, df_seg, col, top_n=10, bins=30)
