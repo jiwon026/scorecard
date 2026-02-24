@@ -879,7 +879,7 @@ with tabs[0]:
 
         # ---- KPI 4개 (추천)
         k1, k2, k3, k4 = st.columns(4)
-        k1.metric("전체 고객 수", f"{kpi['n']:,}")
+        k1.metric("신 고객 수", f"{kpi['n']:,}")
         # 전체 평균 PD (없으면 계산)
         avg_pd = kpi.get("avg_pd", None)
         if avg_pd is None:
@@ -895,7 +895,7 @@ with tabs[0]:
         k4.metric("고위험군 평균 PD", f"{high_avg_pd*100:.2f}%" if high_avg_pd is not None and not np.isnan(high_avg_pd) else "-")
 
         st.caption("※ 위 KPI는 전체 데이터가 아닌 샘플(랜덤 추출) 기준으로 산출되었습니다.")    
-        st.caption("Model Performance (Validation) | AUC: 0.645  |  KS: 0.215  |  Gini: 0.29")
+        st.caption("Model Performance (Validation) | 모델 성능(AUC): 0.645  |  변별력 성능(KS): 0.215  |  예측 모델의 판별력(Gini): 0.29")
 
         # =========================
         # 2) 등급별 분포
@@ -1053,18 +1053,21 @@ with tabs[0]:
                     "대표 특성": high_val,
                     "위험 집중도": lift
                 })
-        
-            top_df = pd.DataFrame(rows).dropna()
-            if top_df.empty:
-                st.warning("특징 요약을 만들 수 있는 컬럼이 부족해요. candidate_cols를 샘플 컬럼에 맞춰 조정해주세요.")
-            else:
-                top_df = top_df.sort_values("Lift", ascending=False).head(5)
-        
-                # 표 + 간단 bar chart
-                st.dataframe(top_df, use_container_width=True)
-    
-        
-                st.caption("Lift가 1보다 크면, 해당 특징이 전체 대비 고위험군에 더 많이 나타납니다.")
+                
+                top_df = pd.DataFrame(rows).dropna()
+                if top_df.empty:
+                    st.warning("특징 요약을 만들 수 있는 컬럼이 부족해요. candidate_cols를 샘플 컬럼에 맞춰 조정해주세요.")
+                else:
+                    top_df["위험 집중도"] = pd.to_numeric(top_df["위험 집중도"], errors="coerce")
+                    top_df = top_df.dropna(subset=["위험 집중도"])
+                
+                    top_df = top_df.sort_values("위험 집중도", ascending=False).head(5)
+                
+                    # 보기 좋게 반올림
+                    top_df["위험 집중도"] = top_df["위험 집중도"].round(2)
+                
+                    st.dataframe(top_df, use_container_width=True)
+                    st.caption("위험 집중도는 전체 대비 해당 특성이 고위험군에 얼마나 더 많이 나타나는지(과대표집)를 의미합니다. 1보다 크면 고위험군에서 더 자주 나타납니다.")
     except Exception as e:
             st.warning(f"샘플 KPI를 계산하지 못했습니다: {e}")
     
