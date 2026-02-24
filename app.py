@@ -743,6 +743,66 @@ def build_upper_industry_options_and_rep(job_ind_df: pd.DataFrame, sample_path: 
 
     return options, rep
 
+def enrich_with_score(df: pd.DataFrame,
+                      meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map):
+    df2 = df.copy()
+
+    # score/proba 계산
+    recs = df2.to_dict("records")
+    scores = np.empty(len(recs), dtype=float)
+    probas = np.empty(len(recs), dtype=float)
+
+    for i, r in enumerate(recs):
+        s, p = score_one_fast(r, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map)
+        scores[i] = s
+        probas[i] = p
+
+    df2["score"] = scores
+    df2["proba"] = probas
+
+    # ✅ 너희가 정한 등급컷(점수 기반) 반영
+    # 고위험: ~549 / 위험: 550~599 / 안정: 600~669 / 우대: 670~
+    def grade4(score):
+        if score <= 549: return "고위험"
+        if score <= 599: return "위험"
+        if score <= 669: return "안정"
+        return "우대"
+
+    df2["grade4"] = df2["score"].apply(grade4)
+
+    # TARGET 정리(있으면)
+    if "TARGET" in df2.columns:
+        df2["TARGET"] = pd.to_numeric(df2["TARGET"], errors="coerce").fillna(0).astype(int)
+
+    return df2
+
+
+def compute_lift_table(df_all: pd.DataFrame, df_seg: pd.DataFrame, col: str):
+    """
+    col별로: 고위험군 최빈값/구성비/전체비/위험집중도(Lift) 계산
+    Lift = seg_share / all_share
+    """
+    a = df_all[col].dropna().astype(str).str.strip()
+    s = df_seg[col].dropna().astype(str).str.strip()
+
+    if len(a) == 0 or len(s) == 0:
+        return None
+
+    all_dist = a.value_counts(normalize=True)
+    seg_dist = s.value_counts(normalize=True)
+
+    # seg에서 가장 흔한 값(대표 특성)
+    top_val = seg_dist.index[0]
+    seg_share = float(seg_dist.get(top_val, 0.0))
+    all_share = float(all_dist.get(top_val, 0.0))
+    lift = (seg_share / all_share) if all_share > 0 else np.nan
+
+    return {
+        "구분 기준": col,
+        "대표 특성": top_val,
+        "위험 집중도": lift,
+    }
+
 # =========================
 # Policy helper
 # =========================
@@ -846,6 +906,7 @@ job_ind_map = build_job_ind_map(job_ind_df)
 tabs = st.tabs([
     "① Overview",
     "② 고객 입력 & Explain",
+    "③ Risk Insight",
 ])
 
 # ---- Overview
@@ -1247,13 +1308,73 @@ with tabs[1]:
 
         cA, cB = st.columns(2)
         with cA:
-            st.markdown("#### 리스크를 높인 요인 (Top 10)")
-            st.dataframe(bd.sort_values("points").head(10), use_container_width=True)
+            st.markdown("#### 리스크를 높인 요인 (Top 5)")
+            st.dataframe(bd.sort_values("points").head(5), use_container_width=True)
 
         with cB:
-            st.markdown("#### 리스크를 낮춘 요인 (Top 10)")
-            st.dataframe(bd.sort_values("points", ascending=False).head(10), use_container_width=True)
+            st.markdown("#### 리스크를 낮춘 요인 (Top )")
+            st.dataframe(bd.sort_values("points", ascending=False).head(5), use_container_width=True)
 
         st.caption("점수(points)가 음수일수록 위험 요인(Score 감소), 양수일수록 안전 요인입니다.")
+
+def enrich_with_score(df: pd.DataFrame,
+                      meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map):
+    df2 = df.copy()
+
+    # score/proba 계산
+    recs = df2.to_dict("records")
+    scores = np.empty(len(recs), dtype=float)
+    probas = np.empty(len(recs), dtype=float)
+
+    for i, r in enumerate(recs):
+        s, p = score_one_fast(r, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map)
+        scores[i] = s
+        probas[i] = p
+
+    df2["score"] = scores
+    df2["proba"] = probas
+
+    # ✅ 너희가 정한 등급컷(점수 기반) 반영
+    # 고위험: ~549 / 위험: 550~599 / 안정: 600~669 / 우대: 670~
+    def grade4(score):
+        if score <= 549: return "고위험"
+        if score <= 599: return "위험"
+        if score <= 669: return "안정"
+        return "우대"
+
+    df2["grade4"] = df2["score"].apply(grade4)
+
+    # TARGET 정리(있으면)
+    if "TARGET" in df2.columns:
+        df2["TARGET"] = pd.to_numeric(df2["TARGET"], errors="coerce").fillna(0).astype(int)
+
+    return df2
+
+
+def compute_lift_table(df_all: pd.DataFrame, df_seg: pd.DataFrame, col: str):
+    """
+    col별로: 고위험군 최빈값/구성비/전체비/위험집중도(Lift) 계산
+    Lift = seg_share / all_share
+    """
+    a = df_all[col].dropna().astype(str).str.strip()
+    s = df_seg[col].dropna().astype(str).str.strip()
+
+    if len(a) == 0 or len(s) == 0:
+        return None
+
+    all_dist = a.value_counts(normalize=True)
+    seg_dist = s.value_counts(normalize=True)
+
+    # seg에서 가장 흔한 값(대표 특성)
+    top_val = seg_dist.index[0]
+    seg_share = float(seg_dist.get(top_val, 0.0))
+    all_share = float(all_dist.get(top_val, 0.0))
+    lift = (seg_share / all_share) if all_share > 0 else np.nan
+
+    return {
+        "구분 기준": col,
+        "대표 특성": top_val,
+        "위험 집중도": lift,
+    }
 
 st.divider()
