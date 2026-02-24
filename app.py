@@ -660,75 +660,31 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
     # -------------------------
     # 5) TARGET 있으면 실제 연체율/리프트
     # -------------------------
-    if "TARGET" in df_sc.columns:
-        overall_dr = df_sc["TARGET"].mean()
-        seg_dr = df_seg["TARGET"].mean()
-    
-        lift = seg_dr / overall_dr if overall_dr > 0 else np.nan
-    
-        k1, k2, k3, k4 = st.columns(4)
-    
-        k1.metric("전체 평균 연체율", f"{overall_dr*100:.2f}%")
-        k2.metric("상위 위험군 연체율", f"{seg_dr*100:.2f}%")
-        k3.metric("위험 배율(Lift)", f"{lift:.2f}배")
-        k4.metric("상위 위험군 비중", f"{len(df_seg)/len(df_sc)*100:.1f}%")
+    if "TARGET" in df.columns:
+        y = pd.to_numeric(df["TARGET"], errors="coerce").fillna(0).astype(int).values
+        overall_dr = float(y.mean()) if len(y) else np.nan
+        out["overall_dr"] = overall_dr  # 0~1
 
-def _upper_from_full_industry(s: str) -> str:
-    s = str(s).strip()
-    parts = s.split()
-    # 예: "교육 2" -> "교육"
-    if len(parts) >= 2 and parts[-1].isdigit():
-        return " ".join(parts[:-1]).strip()
-    return s
+        dr_rows = []
+        lift_rows = []
 
-@st.cache_data(show_spinner=False)
-def build_upper_industry_options_and_rep(job_ind_df: pd.DataFrame, sample_path: Path):
-    def _upper_from_full_industry(full: str) -> str:
-        full = str(full).strip()
-        # "교육 2" -> "교육"
-        parts = full.split()
-        if len(parts) >= 2 and parts[-1].isdigit():
-            return " ".join(parts[:-1]).strip()
-        # "교육2" -> "교육"
-        m = re.match(r"^(.*?)(\d+)$", full)
-        if m:
-            return m.group(1).strip()
-        return full
+        for g in grade_order:
+            m = (grade4 == g)
+            dr = float(y[m].mean()) if np.any(m) else np.nan          # 0~1
+            dr_pct = dr * 100.0 if not np.isnan(dr) else np.nan      # %
+            lift = (dr / overall_dr) if (not np.isnan(dr) and not np.isnan(overall_dr) and overall_dr > 0) else np.nan
 
-    # 1) 샘플 데이터 읽기
-    sample_path = Path(sample_path)
-    if sample_path.suffix.lower() == ".parquet":
-        df_s = pd.read_parquet(sample_path)
+            dr_rows.append({"grade": g, "dr": dr_pct})
+            lift_rows.append({"grade": g, "lift": lift})
+
+        out["dr_by_grade"] = pd.DataFrame(dr_rows)         # grade, dr(%)
+        out["lift_by_grade"] = pd.DataFrame(lift_rows)     # grade, lift
     else:
-        df_s = pd.read_csv(sample_path)
+        out["overall_dr"] = np.nan
+        out["dr_by_grade"] = pd.DataFrame({"grade": grade_order, "dr": [np.nan]*len(grade_order)})
+        out["lift_by_grade"] = pd.DataFrame({"grade": grade_order, "lift": [np.nan]*len(grade_order)})
 
-    if "산업군_상위" not in df_s.columns:
-        raise ValueError("샘플 파일에 '산업군_상위' 컬럼이 없습니다.")
-
-    options = (
-        df_s["산업군_상위"]
-        .dropna()
-        .astype(str)
-        .str.strip()
-        .unique()
-        .tolist()
-    )
-
-    # 2) 무역/산업/운송 제거
-    banned = {"무역", "산업", "운송"}
-    options = [x for x in options if x not in banned]
-    options = sorted(options)
-
-    # 3) 대표 매핑: 상위 -> job_ind_df의 실제 산업군 문자열(예: 교육 -> "교육 2")
-    rep = {}
-    if "산업군" in job_ind_df.columns:
-        full_list = job_ind_df["산업군"].dropna().astype(str).tolist()
-        for full in full_list:
-            up = _upper_from_full_industry(full)
-            if up not in rep:
-                rep[up] = full
-
-    return options, rep
+    return out
 
 def enrich_with_score(df: pd.DataFrame,
                       meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map):
