@@ -894,8 +894,8 @@ with tabs[0]:
         k3.metric("고위험군 비율", f"{high_share*100:.1f}%" if high_share is not None else "-")
         k4.metric("고위험군 평균 PD", f"{high_avg_pd*100:.2f}%" if high_avg_pd is not None and not np.isnan(high_avg_pd) else "-")
 
-        st.caption("※ 위 KPI는 전체 데이터가 아닌 샘플(랜덤 추출) 기준으로 산출되었습니다.")
-
+        st.caption("※ 위 KPI는 전체 데이터가 아닌 샘플(랜덤 추출) 기준으로 산출되었습니다.")    
+        st.caption("Model Performance (Validation) | AUC: 0.645  |  KS: 0.215  |  Gini: 0.29")
 
         # =========================
         # 2) 등급별 분포
@@ -1069,10 +1069,7 @@ with tabs[0]:
                 st.caption("Lift가 1보다 크면, 해당 특징이 전체 대비 고위험군에 더 많이 나타납니다.")
     except Exception as e:
             st.warning(f"샘플 KPI를 계산하지 못했습니다: {e}")
-    # =========================
-    # 3) 성능지표는 보조로만(작게)
-    # =========================
-    st.caption("Model Performance (Validation) | AUC: 0.645  |  KS: 0.215  |  Gini: 0.29")
+    
 
     # =========================
     # 4) 운영 정책 예시
