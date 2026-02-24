@@ -975,7 +975,7 @@ with tabs[0]:
 
 
         # --- enriched df (score/pd/grade + pts_*)
-        enriched = compute_portfolio_enriched(
+        enriched = compute_portfolio_kpis_from_df(
             sample_df, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map
         )
         
