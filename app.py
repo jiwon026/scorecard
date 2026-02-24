@@ -1402,36 +1402,54 @@ with tabs[2]:
     # -------------------------
     # C) 산업군별 연체율 Heatmap (표 스타일링)
     # -------------------------
-    grade_order = ["우대","안정","위험","고위험"]
-    piv = piv.reindex(columns=grade_order).sort_index()
-    
-    def _is_missing(v):
-        if v is None:
-            return True
-        if isinstance(v, float) and np.isnan(v):
-            return True
-        if isinstance(v, str) and v.strip().lower() in ("none", "null", "nan", ""):
-            return True
-        return False
-    
-    # 1) 결측/None류를 전부 np.nan으로 통일 (핵심!!)
-    piv = piv.applymap(lambda v: np.nan if _is_missing(v) else v)
-    
-    # 2) 숫자로 강제 변환 (못 바꾸는건 NaN)
-    piv = piv.apply(pd.to_numeric, errors="coerce")
-    
-    # 3) NaN 칸은 회색 처리
-    def na_gray(v):
-        return "background-color:#f2f2f2; color:#666;" if pd.isna(v) else ""
-    
-    sty = (
-        piv.style
-          .applymap(na_gray)
-          .background_gradient(cmap="Reds", axis=None)
-          .format("{:.2f}", na_rep="")
-    )
-    
-    st.dataframe(sty, use_container_width=True)
+    st.markdown("### 3) 산업군별 연체율 Heatmap")
+
+    if "산업군_상위" not in df_sc.columns:
+        st.warning("샘플 데이터에 '산업군_상위' 컬럼이 없습니다.")
+    elif "TARGET" not in df_sc.columns:
+        st.warning("샘플 데이터에 TARGET이 없어 산업군별 ‘실제 연체율’ Heatmap을 만들 수 없어요.")
+    else:
+        # ✅ 산업군_상위 × grade4 연체율(%)
+        piv = (
+            df_sc
+            .groupby(["산업군_상위", "grade4"])["TARGET"]
+            .mean()
+            .mul(100)
+            .unstack("grade4")
+        )
+
+        # ✅ NaN은 검게 보이거나 이상해질 수 있으니 표시/색상 처리
+        # 컬럼 순서 고정
+        grade_order = ["우대","안정","위험","고위험"]
+        piv = piv.reindex(columns=grade_order).sort_index()
+        
+        def _is_missing(v):
+            if v is None:
+                return True
+            if isinstance(v, float) and np.isnan(v):
+                return True
+            if isinstance(v, str) and v.strip().lower() in ("none", "null", "nan", ""):
+                return True
+            return False
+        
+        # 1) 결측/None류를 전부 np.nan으로 통일 (핵심!!)
+        piv = piv.applymap(lambda v: np.nan if _is_missing(v) else v)
+        
+        # 2) 숫자로 강제 변환 (못 바꾸는건 NaN)
+        piv = piv.apply(pd.to_numeric, errors="coerce")
+        
+        # 3) NaN 칸은 회색 처리
+        def na_gray(v):
+            return "background-color:#f2f2f2; color:#666;" if pd.isna(v) else ""
+        
+        sty = (
+            piv.style
+              .applymap(na_gray)
+              .background_gradient(cmap="Reds", axis=None)
+              .format("{:.2f}", na_rep="")
+        )
+        
+        st.dataframe(sty, use_container_width=True)
     st.caption("값은 산업군×등급별 실제 연체율(%)입니다. 빈 칸은 표본 부족/결측으로 계산 불가한 경우입니다.")
 
 st.divider()
