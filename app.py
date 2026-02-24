@@ -854,7 +854,6 @@ housing_options = list(cat_map.get(housing_feat, {}).keys())
 if not housing_options:
     housing_options = ["주택 / 아파트", "아파트 임대", "오피스텔", "공공분양", "기타"]
 
-주거 = st.selectbox("주거 형태", housing_options)
 
 
 tabs = st.tabs([
@@ -1369,32 +1368,35 @@ with tabs[2]:
     # -------------------------
     # C) 산업군별 연체율 Heatmap (표 스타일링)
     # -------------------------
-    st.markdown("### 4) 산업군별 연체율 Heatmap")
+    st.markdown("### 3) 산업군별 연체율 Heatmap")
 
     if "산업군_상위" not in df_sc.columns:
         st.warning("샘플 데이터에 '산업군_상위' 컬럼이 없습니다.")
     elif "TARGET" not in df_sc.columns:
-        st.warning("샘플 데이터에 TARGET이 없어서 산업군별 ‘실제 연체율’ Heatmap을 만들 수 없어요.")
+        st.warning("샘플 데이터에 TARGET이 없어 산업군별 ‘실제 연체율’ Heatmap을 만들 수 없어요.")
     else:
-        # 산업군_상위 x grade4 연체율(%)
+        # ✅ 산업군_상위 × grade4 연체율(%)
         piv = (
-            df_sc[df_sc["grade4"] == "고위험"]
-            .groupby("산업군_상위")["TARGET"]
+            df_sc
+            .groupby(["산업군_상위", "grade4"])["TARGET"]
             .mean()
             .mul(100)
-            .round(2)
-            .to_frame("고위험 연체율(%)")
-        ).round(2)
+            .unstack("grade4")
+        )
 
-        # 보기 좋게 컬럼 순서 고정
-        col_order = [c for c in ["우대", "안정", "위험", "고위험"] if c in piv.columns]
-        piv = piv[col_order].sort_index()
-        piv = piv.fillna(0)
+        # ✅ NaN은 검게 보이거나 이상해질 수 있으니 표시/색상 처리
+        grade_order = ["우대","안정","위험","고위험"]
+        piv = piv.reindex(columns=grade_order)
+        piv = piv.sort_index()
 
+        # 표본 너무 적은 칸은 NaN으로 남겨두고(=데이터 부족), 표시만 깔끔하게
         st.dataframe(
-            piv.style.background_gradient(cmap="Reds"),
+            piv.style
+               .format("{:.2f}")
+               .set_na_rep("")
+               .background_gradient(cmap="Reds", axis=None),
             use_container_width=True
         )
-        st.caption("값은 산업군별·등급별 ‘실제 연체율(%)’입니다. 색이 진할수록 연체율이 높습니다.")
+        st.caption("값은 산업군×등급별 실제 연체율(%)입니다. 빈 칸은 표본 부족/결측으로 계산 불가한 경우입니다.")
 
 st.divider()
