@@ -1494,9 +1494,13 @@ with tabs[2]:
             return fig
     
         # ===== Continuous: 히스토그램(밀도) =====
+        
         if numeric_ok and n_unique > 10:
             a_num = a_num.dropna()
             s_num = s_num.dropna()
+            
+            a_num = a_num[a_num != 1000]
+            s_num = s_num[s_num != 1000]
     
             ax.hist(a_num.values, bins=bins, density=True, alpha=0.35, label="전체")
             ax.hist(s_num.values, bins=bins, density=True, alpha=0.35, label="상위 위험군")
