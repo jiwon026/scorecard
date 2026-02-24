@@ -904,14 +904,14 @@ flag_map  = build_value_points_map(flag_df)
 job_ind_map = build_job_ind_map(job_ind_df)
 
 # 주거 형태 옵션을 scorecard_cat(=cat_map)에서 그대로 가져오기
-    housing_feat = "주거 형태_woe"
-    housing_options = list(cat_map.get(housing_feat, {}).keys())
-    
-    # 혹시 비어있으면(예외) fallback
-    if not housing_options:
-        housing_options = ["주택 / 아파트", "아파트 임대", "오피스텔", "공공분양", "기타"]
-    
-    주거 = st.selectbox("주거 형태", housing_options)
+housing_feat = "주거 형태_woe"
+housing_options = list(cat_map.get(housing_feat, {}).keys())
+
+# 혹시 비어있으면(예외) fallback
+if not housing_options:
+    housing_options = ["주택 / 아파트", "아파트 임대", "오피스텔", "공공분양", "기타"]
+
+주거 = st.selectbox("주거 형태", housing_options)
 
 
 tabs = st.tabs([
