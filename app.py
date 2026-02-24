@@ -1397,49 +1397,61 @@ with tabs[2]:
     # -------------------------
     # C) 연체율 상위 그룹 변수 분포
     # -------------------------
-    st.markdown("### 3) 연체율 상위 그룹 변수 분포 (상위 위험군 vs 전체)")
+    st.markdown("### 2) 연체율 상위 그룹 변수 분포 (막대 비교)")
 
-    # 분석할 변수 선택 (카테고리형 위주)
-    default_cols = [c for c in ["수입 유형","최종 학력","결혼 여부","주거 형태","자녀수_구간","직업","산업군_상위",
-                               "차량 소유 여부","부동산 소유 여부","배우자유무"]
-                    if c in df_sc.columns]
+    # 분석 변수 선택
+    candidate_cols = [
+        c for c in df_sc.columns
+        if c not in ["score","proba","TARGET"]
+    ]
     
-    cols = st.multiselect(
-        "분포를 볼 변수 선택",
-        options=[c for c in df_sc.columns if c not in ["score","proba","TARGET"]],
-        default=default_cols
+    col = st.selectbox("분포를 볼 변수 선택", candidate_cols)
+    
+    top_n = st.slider("상위 카테고리 개수", 3, 10, 5)
+    
+    # 데이터 준비
+    a = df_sc[col].astype(str).fillna("결측").str.strip()
+    s = df_seg[col].astype(str).fillna("결측").str.strip()
+    
+    # 전체 기준 Top N 카테고리
+    top_cats = a.value_counts().head(top_n).index.tolist()
+    
+    all_share = (
+        a.value_counts(normalize=True)
+        .reindex(top_cats)
+        .fillna(0) * 100
     )
     
-    top_n = st.slider("각 변수에서 보여줄 상위 개수", 3, 10, 5, 1)
+    seg_share = (
+        s.value_counts(normalize=True)
+        .reindex(top_cats)
+        .fillna(0) * 100
+    )
     
-    def dist_compare(df_all, df_seg, col, top_n=5):
-        a = df_all[col].astype(str).fillna("결측").str.strip()
-        s = df_seg[col].astype(str).fillna("결측").str.strip()
+    # ---- 막대그래프 ----
+    x = np.arange(len(top_cats))
+    width = 0.35
     
-        # 전체 Top 카테고리 기준으로 잡기(비교가 깔끔)
-        top_cats = a.value_counts().head(top_n).index.tolist()
+    fig, ax = plt.subplots(figsize=(8,4))
     
-        all_share = a.value_counts(normalize=True).reindex(top_cats).fillna(0) * 100
-        seg_share = s.value_counts(normalize=True).reindex(top_cats).fillna(0) * 100
+    ax.bar(x - width/2, all_share.values, width, label="전체", alpha=0.7)
+    ax.bar(x + width/2, seg_share.values, width, label="상위 위험군", alpha=0.9)
     
-        out = pd.DataFrame({
-            "카테고리": top_cats,
-            "상위 위험군 비중(%)": seg_share.values.round(2),
-            "전체 비중(%)": all_share.values.round(2),
-        })
-        # 차이와 간단 lift도 같이
-        out["차이(%p)"] = (out["상위 위험군 비중(%)"] - out["전체 비중(%)"]).round(2)
-        out["Lift"] = (out["상위 위험군 비중(%)"] / out["전체 비중(%)"]).replace([np.inf, -np.inf], np.nan).round(2)
-        return out.sort_values("Lift", ascending=False)
+    ax.set_xticks(x)
+    ax.set_xticklabels(top_cats, rotation=30, ha="right")
+    ax.set_ylabel("비중 (%)")
+    ax.set_title(f"{col} 분포 비교")
+    ax.legend()
     
-    if len(cols) == 0:
-        st.info("변수를 선택하면 상위 위험군과 전체의 분포를 비교해서 보여줄게요.")
-    else:
-        # 변수별로 표를 접어서 보기 좋게
-        for col in cols:
-            with st.expander(f"📌 {col} 분포 보기", expanded=False):
-                tbl = dist_compare(df_sc, df_seg, col, top_n=top_n)
-                st.dataframe(tbl, use_container_width=True)
-                st.caption("Lift = (상위 위험군 비중 / 전체 비중). 1보다 크면 상위 위험군에 과대표집된 특성이에요.")
+    # 값 라벨
+    for i, v in enumerate(all_share.values):
+        ax.text(i - width/2, v + 0.5, f"{v:.1f}", ha="center", fontsize=9)
+    
+    for i, v in enumerate(seg_share.values):
+        ax.text(i + width/2, v + 0.5, f"{v:.1f}", ha="center", fontsize=9)
+    
+    st.pyplot(fig, use_container_width=True)
+    
+    st.caption("상위 위험군에서 특정 특성이 더 많이 나타나면 두 막대 간 차이가 크게 나타납니다.")
 
 st.divider()
