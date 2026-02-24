@@ -972,6 +972,72 @@ with tabs[0]:
             ax.legend(loc="upper right", frameon=True)
         
         st.pyplot(fig2, use_container_width=True)
+
+
+        # --- enriched df (score/pd/grade + pts_*)
+        enriched = compute_portfolio_enriched(
+            sample_df, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map
+        )
+        
+        # =========================
+        # A) Score distribution + cutlines
+        # =========================
+        st.markdown("### 점수(Score) 분포")
+        fig, ax = plt.subplots(figsize=(8, 3.6))
+        ax.hist(enriched["score"], bins=30, alpha=0.85)
+        for cut, label in [(549, "고위험"), (599, "위험"), (669, "안정")]:
+            ax.axvline(cut, linestyle="--", linewidth=1.5)
+        ax.set_xlabel("Score")
+        ax.set_ylabel("고객 수")
+        st.pyplot(fig, use_container_width=True)
+        
+        # =========================
+        # B) PD decile lift chart (avg_pd vs actual DR)
+        # =========================
+        st.markdown("### PD 10분위 Lift (예측 vs 실제)")
+        if "TARGET" in enriched.columns:
+            dec = (
+                enriched.groupby("pd_decile")
+                .agg(n=("pd","size"), avg_pd=("pd","mean"), dr=("TARGET","mean"))
+                .reset_index()
+            )
+            dec["dr_pct"] = dec["dr"] * 100
+            dec["avg_pd_pct"] = dec["avg_pd"] * 100
+        
+            x = np.arange(len(dec))
+            fig, ax = plt.subplots(figsize=(8, 3.6))
+            ax.bar(x, dec["dr_pct"], alpha=0.8, label="실제 연체율(%)")
+            ax.plot(x, dec["avg_pd_pct"], marker="o", linewidth=2, label="평균 PD(%)")
+            ax.set_xticks(x)
+            ax.set_xticklabels(dec["pd_decile"].astype(str).tolist())
+            ax.set_ylabel("%")
+            ax.legend(loc="upper left")
+            st.pyplot(fig, use_container_width=True)
+        else:
+            st.info("TARGET이 없어 Lift 차트(실제 연체율)는 표시하지 않습니다.")
+        
+        # =========================
+        # C) High-risk common drivers (Top decile vs rest)
+        # =========================
+        st.markdown("### 상위 연체그룹 공통 리스크 요인 (Reason-code 집계)")
+        high = enriched["pd_decile"].astype(str) == "D10"
+        pts_cols = [c for c in enriched.columns if c.startswith("pts_")]
+        
+        mean_high = enriched.loc[high, pts_cols].mean()
+        mean_rest = enriched.loc[~high, pts_cols].mean()
+        delta = (mean_high - mean_rest).sort_values()  # high가 더 음수면 위험 요인
+        
+        top = delta.head(8).reset_index()
+        top.columns = ["feature", "delta_points"]
+        top["feature"] = top["feature"].str.replace("^pts_", "", regex=True)
+        
+        fig, ax = plt.subplots(figsize=(8, 3.6))
+        ax.barh(top["feature"], top["delta_points"], alpha=0.85)
+        ax.set_xlabel("D10(상위 10%) - 나머지 평균 포인트 차이 (음수일수록 리스크)")
+        st.pyplot(fig, use_container_width=True)
+        
+        st.dataframe(top, use_container_width=True)
+        st.caption("해석: 상위 10% 고객에서 평균적으로 더 큰 점수 하락(음수 포인트)을 만드는 변수들입니다.")
     except Exception as e:
             st.warning(f"샘플 KPI를 계산하지 못했습니다: {e}")
     # =========================
