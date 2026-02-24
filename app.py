@@ -1432,7 +1432,7 @@ with tabs[2]:
         
         def na_gray(v):
             if pd.isna(v):
-                return "background-color:#f2f2f2; color:#666;"
+                return "background-color:white;"
             return ""
         
         sty = (
