@@ -969,7 +969,7 @@ with tabs[0]:
             ax.text(0.02, 0.92, f"전체 평균 연체율: {y:.2f}%", transform=ax.transAxes,
                     ha="left", va="top", fontsize=11,
                     bbox=dict(facecolor="white", edgecolor="gray", alpha=0.9))
-            ax.legend(loc="upper left", frameon=True)
+            ax.legend(loc="upper right", frameon=True)
         
         st.pyplot(fig2, use_container_width=True)
     except Exception as e:
