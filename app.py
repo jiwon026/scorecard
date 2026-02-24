@@ -1386,10 +1386,10 @@ with tabs[2]:
     
     # ✅ 실제 df_sc에 존재하는 것만 남김
     allowed_cols = [c for c in ALLOWED_VARS if c in df_sc.columns]
-    candidate_cols = st.multiselect("분석할 변수 선택", options=allowed_cols, default=allowed_cols[:1])
+    lift_vars = st.multiselect("분석할 변수 선택", options=allowed_cols, default=[], key="lift_vars)
 
     rows = []
-    for c in allowed_cols:
+    for c in lift_vars:
         if c in ["score", "proba", "TARGET"]:
             continue
         out = compute_lift_table(df_sc, df_seg, c)
@@ -1534,13 +1534,10 @@ with tabs[2]:
 
     
     st.markdown("### 3) 연체율 상위 그룹 변수 분포 (전체 vs 상위 위험군)")
-    col = st.selectbox("비교할 변수 선택", options=allowed_cols, index=0)
+    dist_var = st.selectbox("비교할 변수 선택", options=allowed_cols, index=0, "dist_var")
     
-    for col in candidate_cols:
-        if col in ["TARGET", "score", "proba", "grade4"]:
-            continue
-        fig = plot_dist_overall_vs_seg(df_sc, df_seg, col, top_n=10, bins=30)
-        if fig is not None:
-            st.pyplot(fig, use_container_width=True)
+    fig = plot_dist_overall_vs_seg(df_sc, df_seg, col, top_n=10, bins=30)
+    if fig is not None:
+        st.pyplot(fig, use_container_width=True)
 
 st.divider()
