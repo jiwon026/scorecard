@@ -1396,89 +1396,144 @@ with tabs[2]:
 
     # -------------------------
     # C) 연체율 상위 그룹 변수 분포
-    # -------------------------
-    st.markdown("### 2) 연체율 상위 그룹 변수 분포")
-
-    col = st.selectbox("변수 선택", [c for c in df_sc.columns if c not in ["score","proba","TARGET"]])
+    # -------------------------    
+    def _is_numeric_series(s: pd.Series) -> bool:
+        return pd.api.types.is_numeric_dtype(s)
     
-    # 수치형 판단 (숫자로 변환 가능한 비율로)
-    tmp_all = pd.to_numeric(df_sc[col], errors="coerce")
-    numeric_ratio = tmp_all.notna().mean()
+    def _clean_series(s: pd.Series) -> pd.Series:
+        # 문자열 공백/None 처리
+        if pd.api.types.is_object_dtype(s):
+            s = s.astype(str).str.strip()
+            s = s.replace({"None": np.nan, "none": np.nan, "nan": np.nan, "": np.nan})
+        return s
     
-    is_numeric = numeric_ratio >= 0.7  # 70% 이상 숫자로 해석되면 수치형으로 간주
+    def plot_dist_overall_vs_seg(df_all: pd.DataFrame, df_seg: pd.DataFrame, col: str,
+                                 top_n: int = 10, bins: int = 30):
+        """
+        col 하나에 대해 전체(df_all) vs 상위위험군(df_seg) 분포를 자동으로 그려줌.
+        - binary(유니크<=2): 비율 막대
+        - categorical: Top N 막대(비율)
+        - continuous: 히스토그램(밀도) 겹치기
+        """
+        a = _clean_series(df_all[col]).dropna()
+        s = _clean_series(df_seg[col]).dropna()
     
-    if is_numeric:
-        # ----- 수치형: 겹친 히스토그램 -----
-        all_vals = pd.to_numeric(df_sc[col], errors="coerce").dropna().values
-        seg_vals = pd.to_numeric(df_seg[col], errors="coerce").dropna().values
+        if len(a) == 0 or len(s) == 0:
+            return None
     
-        bins = st.slider("bin 개수", 10, 60, 30)
+        # 숫자 변환 가능한 경우 numeric 후보로 보되, "실질 binary/범주" 먼저 체크
+        # (예: 0/1, 혹은 유니크 2개)
+        a_vals = a.unique()
+        s_vals = s.unique()
+        uniq_all = pd.unique(pd.concat([pd.Series(a_vals), pd.Series(s_vals)])).tolist()
+        uniq_all = [u for u in uniq_all if pd.notna(u)]
+        n_unique = len(set(map(str, uniq_all)))  # object여도 안정적으로
     
-        fig, ax = plt.subplots(figsize=(8,4))
+        # numeric 시도
+        a_num = pd.to_numeric(a, errors="coerce")
+        s_num = pd.to_numeric(s, errors="coerce")
+        numeric_ok = (a_num.notna().mean() > 0.8) and (s_num.notna().mean() > 0.8)
     
-        ax.hist(all_vals, bins=bins, density=True, alpha=0.35, label="전체")
-        ax.hist(seg_vals, bins=bins, density=True, alpha=0.45, label="상위 위험군")
+        # ---- 1) binary 판단 (가장 우선)
+        # 유니크가 2개 이하이거나, 값이 {0,1}에 가까우면 binary로 처리
+        is_binary = False
+        if n_unique <= 2:
+            is_binary = True
+        else:
+            if numeric_ok:
+                uniq_num = set(pd.unique(pd.concat([a_num.dropna(), s_num.dropna()])))
+                if uniq_num.issubset({0, 1}):
+                    is_binary = True
     
-        ax.set_title(f"{col} 분포 (전체 vs 상위 위험군)")
-        ax.set_ylabel("Density")
-        ax.set_xlabel(col)
-        ax.legend()
+        # ---- Plot
+        fig, ax = plt.subplots(figsize=(8, 3.6))
     
-        st.pyplot(fig, use_container_width=True)
-        
-        unique_vals = df_sc[col].dropna().unique()
-
-        # 0/1 또는 True/False만 있으면 binary로 처리
-        is_binary = set(unique_vals).issubset({0,1}) or len(unique_vals) <= 2
-        # --- binary는 막대그래프로 ---
+        # ===== Binary: 비율 막대 =====
         if is_binary:
-
-            a = df_sc[col]
-            s = df_seg[col]
-        
-            all_rate = a.mean() * 100
-            seg_rate = s.mean() * 100
-        
-            labels = ["0 (없음)", "1 (있음)"]
-        
-            fig, ax = plt.subplots(figsize=(6,4))
-        
-            ax.bar(["전체"], [all_rate], alpha=0.7, label="전체")
-            ax.bar(["상위 위험군"], [seg_rate], alpha=0.9, label="상위 위험군")
-        
-            ax.set_ylabel("1 비율 (%)")
-            ax.set_title(f"{col} = 1 비율 비교")
-        
-            ax.text(0, all_rate + 1, f"{all_rate:.1f}%", ha="center")
-            ax.text(1, seg_rate + 1, f"{seg_rate:.1f}%", ha="center")
-        
-            st.pyplot(fig, use_container_width=True)
-            
-    else:
-        # ----- 범주형: 막대 비교 -----
-        top_n = st.slider("상위 카테고리 개수", 3, 10, 5)
+            # 0/1이든, 두 범주든 둘 다 처리
+            cats = sorted(list(set(map(str, pd.unique(pd.concat([a, s]))))))
+            a_rate = a.astype(str).value_counts(normalize=True).reindex(cats, fill_value=0) * 100
+            s_rate = s.astype(str).value_counts(normalize=True).reindex(cats, fill_value=0) * 100
     
-        a = df_sc[col].astype(str).fillna("결측").str.strip()
-        s = df_seg[col].astype(str).fillna("결측").str.strip()
+            x = np.arange(len(cats))
+            w = 0.38
+            ax.bar(x - w/2, a_rate.values, width=w, alpha=0.7, label="전체")
+            ax.bar(x + w/2, s_rate.values, width=w, alpha=0.7, label="상위 위험군")
     
-        top_cats = a.value_counts().head(top_n).index.tolist()
+            ax.set_xticks(x)
+            ax.set_xticklabels(cats)
+            ax.set_ylabel("비중(%)")
+            ax.set_title(f"{col} 분포 (전체 vs 상위 위험군)")
+            ax.legend()
     
-        all_share = a.value_counts(normalize=True).reindex(top_cats).fillna(0) * 100
-        seg_share = s.value_counts(normalize=True).reindex(top_cats).fillna(0) * 100
+            # 라벨
+            ymax = max(a_rate.max(), s_rate.max())
+            for i in range(len(cats)):
+                ax.text(i - w/2, a_rate.values[i] + ymax*0.02, f"{a_rate.values[i]:.1f}%", ha="center", fontsize=9)
+                ax.text(i + w/2, s_rate.values[i] + ymax*0.02, f"{s_rate.values[i]:.1f}%", ha="center", fontsize=9)
     
-        x = np.arange(len(top_cats))
-        width = 0.35
+            return fig
     
-        fig, ax = plt.subplots(figsize=(8,4))
-        ax.bar(x - width/2, all_share.values, width, label="전체", alpha=0.7)
-        ax.bar(x + width/2, seg_share.values, width, label="상위 위험군", alpha=0.9)
+        # ===== Continuous: 히스토그램(밀도) =====
+        if numeric_ok and n_unique > 10:
+            a_num = a_num.dropna()
+            s_num = s_num.dropna()
+    
+            ax.hist(a_num.values, bins=bins, density=True, alpha=0.35, label="전체")
+            ax.hist(s_num.values, bins=bins, density=True, alpha=0.35, label="상위 위험군")
+    
+            ax.set_ylabel("Density")
+            ax.set_title(f"{col} 분포 (전체 vs 상위 위험군)")
+            ax.legend()
+            return fig
+    
+        # ===== Categorical: Top N 막대(비율) =====
+        a_cat = a.astype(str)
+        s_cat = s.astype(str)
+    
+        # 전체 기준 Top N 카테고리 선정 + 기타(Other)
+        top_cats = a_cat.value_counts().head(top_n).index.tolist()
+    
+        def _collapse(series, top):
+            series = series.where(series.isin(top), other="Other")
+            return series
+    
+        a2 = _collapse(a_cat, top_cats)
+        s2 = _collapse(s_cat, top_cats)
+    
+        cats = top_cats + (["Other"] if ("Other" in pd.unique(pd.concat([a2, s2]))) else [])
+        a_rate = a2.value_counts(normalize=True).reindex(cats, fill_value=0) * 100
+        s_rate = s2.value_counts(normalize=True).reindex(cats, fill_value=0) * 100
+    
+        x = np.arange(len(cats))
+        w = 0.38
+        ax.bar(x - w/2, a_rate.values, width=w, alpha=0.7, label="전체")
+        ax.bar(x + w/2, s_rate.values, width=w, alpha=0.7, label="상위 위험군")
     
         ax.set_xticks(x)
-        ax.set_xticklabels(top_cats, rotation=30, ha="right")
-        ax.set_ylabel("비중 (%)")
-        ax.set_title(f"{col} 분포 비교")
+        ax.set_xticklabels(cats, rotation=20, ha="right")
+        ax.set_ylabel("비중(%)")
+        ax.set_title(f"{col} 분포 (전체 vs 상위 위험군)")
         ax.legend()
     
-        st.pyplot(fig, use_container_width=True)
+        return fig
+        st.markdown("### 3) 연체(상위 위험군) 변수 분포 (전체 vs 상위 위험군)")
+
+        default_cols = [
+            "수입 유형", "최종 학력", "결혼 여부", "주거 형태", "자녀수_구간",
+            "직업", "산업군_상위",
+            "차량 소유 여부", "부동산 소유 여부", "배우자유무",
+            "나이", "근속연수", "가입연수", "연간 수입", "거주지 인구 비율"
+        ]
+        default_cols = [c for c in default_cols if c in df_sc.columns]
+        
+        cols = st.multiselect("비교할 변수 선택", options=list(df_sc.columns), default=default_cols)
+        
+        for col in cols:
+            if col in ["TARGET", "score", "proba", "grade4"]:
+                continue
+            fig = plot_dist_overall_vs_seg(df_sc, df_seg, col, top_n=10, bins=30)
+            if fig is not None:
+                st.pyplot(fig, use_container_width=True)
 
 st.divider()
