@@ -1423,6 +1423,7 @@ with tabs[2]:
         grade_order = ["우대", "안정", "위험", "고위험"]
         piv = piv.reindex(columns=grade_order)
         piv = piv.sort_index()
+        piv = piv.apply(pd.to_numeric, errors="coerce")
         
         # Heatmap 스타일
         sty = (
