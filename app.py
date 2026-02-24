@@ -1002,7 +1002,7 @@ with tabs[0]:
         overall = kpi.get("overall_dr", np.nan)  # 0~1
         if not np.isnan(overall):
             y = overall * 100
-            ax.axhline(y, color="gray", linestyle="--", linewidth=1.5, label=f"전체 평균 연체율({y:2f}%")
+            ax.axhline(y, color="gray", linestyle="--", linewidth=1.5, label=f"전체 평균 연체율({y:.2f}%")
             ax.text(0.02, 0.92, f"전체 평균 연체율: {y:.2f}%", transform=ax.transAxes,
                     ha="left", va="top", fontsize=11,
                     bbox=dict(facecolor="white", edgecolor="gray", alpha=0.9))
