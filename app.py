@@ -1534,7 +1534,7 @@ with tabs[2]:
 
     
     st.markdown("### 3) 연체율 상위 그룹 변수 분포 (전체 vs 상위 위험군)")
-    dist_var = st.selectbox("비교할 변수 선택", options=allowed_cols, index=0, "dist_var")
+    dist_var = st.selectbox("비교할 변수 선택", options=allowed_cols, index=0, key="dist_var")
     
     fig = plot_dist_overall_vs_seg(df_sc, df_seg, col, top_n=10, bins=30)
     if fig is not None:
