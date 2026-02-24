@@ -1399,50 +1399,5 @@ with tabs[2]:
 
     st.divider()
 
-    # -------------------------
-    # C) 산업군별 연체율 Heatmap (표 스타일링)
-    # -------------------------
-    st.markdown("### 3) 산업군별 연체율 Heatmap")
-    if "산업군_상위" not in df_sc.columns:
-        st.warning("샘플 데이터에 '산업군_상위' 컬럼이 없습니다.")
-    elif "TARGET" not in df_sc.columns:
-        st.warning("샘플 데이터에 TARGET이 없어 산업군별 ‘실제 연체율’ Heatmap을 만들 수 없어요.")
-    else:
-        # ✅ 산업군_상위 × grade4 연체율(%)
-        piv = (
-            df_sc
-            .groupby(["산업군_상위", "grade4"])["TARGET"]
-            .mean()
-            .mul(100)
-            .unstack("grade4")
-        )
-
-        # ✅ NaN은 검게 보이거나 이상해질 수 있으니 표시/색상 처리
-        # 컬럼 순서 고정
-        grade_order = ["우대","안정","위험","고위험"]
-        piv = piv.reindex(columns=grade_order).sort_index()
-        
-        # 숫자형 강제 변환
-        piv = piv.apply(pd.to_numeric, errors="coerce")
-        
-        # 🔥 핵심: NaN을 제외하고 min/max 계산
-        valid_vals = piv.values[np.isfinite(piv.values)]
-        vmin = np.min(valid_vals) if len(valid_vals) else 0
-        vmax = np.max(valid_vals) if len(valid_vals) else 1
-        
-        def na_gray(v):
-            if pd.isna(v):
-                return "background-color:white;"
-            return ""
-        
-        sty = (
-            piv.style
-              .applymap(na_gray)
-              .background_gradient(cmap="Reds", vmin=vmin, vmax=vmax)
-              .format("{:.2f}", na_rep="")
-        )
-        
-        st.dataframe(sty, use_container_width=True)
-    st.caption("값은 산업군×등급별 실제 연체율(%)입니다. 빈 칸은 표본 부족/결측으로 계산 불가한 경우입니다.")
 
 st.divider()
