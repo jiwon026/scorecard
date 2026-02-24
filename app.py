@@ -750,6 +750,11 @@ def enrich_with_score(df: pd.DataFrame,
 
     return df2
 
+    if "배우자유무" in df2.columns and "자녀수_구간" in df2.columns:
+        child_bucket = df2["자녀수_구간"].astype(str).str.strip()
+        child_n = child_bucket.replace({"3+": "3"}).astype(float).fillna(0)
+        spouse = pd.to_numeric(df2["배우자유무"], errors="coerce").fillna(1)
+        df2["한부모 가정"] = ((spouse == 0) & (child_n > 0)).astype(int)
 
 def compute_lift_table(df_all: pd.DataFrame, df_seg: pd.DataFrame, col: str):
     """
@@ -1002,7 +1007,7 @@ with tabs[0]:
         overall = kpi.get("overall_dr", np.nan)  # 0~1
         if not np.isnan(overall):
             y = overall * 100
-            ax.axhline(y, color="gray", linestyle="--", linewidth=1.5, label=f"전체 평균 연체율({y:.2f}%)")
+            ax.axhline(y, color="gray", linestyle="--", linewidth=1.5, label=f"전체 평균 연체율")
             ax.text(0.02, 0.92, f"전체 평균 연체율: {y:.2f}%", transform=ax.transAxes,
                     ha="left", va="top", fontsize=11,
                     bbox=dict(facecolor="white", edgecolor="gray", alpha=0.9))
@@ -1376,17 +1381,16 @@ with tabs[2]:
     candidate_cols = st.multiselect("분석할 변수 선택", options=list(df_sc.columns), default=default_cols)
 
     rows = []
-    for col in candidate_cols:
-        # 너무 연속형은 제외(원하면 bins로 추가 가능)
-        if col in ["score", "proba", "TARGET"]:
+    for c in allowed_cols:
+        if c in ["score", "proba", "TARGET"]:
             continue
-        out = compute_lift_table(df_sc, df_seg, col)
+        out = compute_lift_table(df_sc, df_seg, c)
         if out is not None:
             rows.append(out)
-
+    
     top_df = pd.DataFrame(rows)
     if top_df.empty:
-        st.warning("선택한 변수로 Lift를 계산할 수 없어요. (결측 많거나 문자열 변환 불가)")
+        st.warning("선택한 변수로 Lift를 계산할 수 없어요.")
     else:
         top_df["위험 집중도"] = pd.to_numeric(top_df["위험 집중도"], errors="coerce")
         top_df = top_df.dropna(subset=["위험 집중도"]).sort_values("위험 집중도", ascending=False).head(10)
@@ -1521,15 +1525,19 @@ with tabs[2]:
         return fig
     st.markdown("### 3) 연체(상위 위험군) 변수 분포 (전체 vs 상위 위험군)")
 
-    default_cols = [
+    # ✅ 너가 쓰는 변수만 고정 (화이트리스트)
+    ALLOWED_VARS = [
         "수입 유형", "최종 학력", "결혼 여부", "주거 형태", "자녀수_구간",
-        "직업", "산업군_상위",
-        "차량 소유 여부", "부동산 소유 여부", "배우자유무",
+        "산업군_상위", "성별", "가족 구성원 수", "업무용 휴대전화 소유 여부",
+        "차량 소유 여부", "부동산 소유 여부", "한부모 가정",
         "나이", "근속연수", "가입연수", "연간 수입", "거주지 인구 비율"
     ]
-    default_cols = [c for c in default_cols if c in df_sc.columns]
     
-    cols = st.multiselect("비교할 변수 선택", options=list(df_sc.columns), default=default_cols)
+    # ✅ 실제 df_sc에 존재하는 것만 남김
+    allowed_cols = [c for c in ALLOWED_VARS if c in df_sc.columns]
+    
+    st.markdown("### 2) 연체율 상위 그룹 변수 분포 (전체 vs 상위 위험군)")
+    col = st.selectbox("비교할 변수 선택", options=allowed_cols, index=0)
     
     for col in cols:
         if col in ["TARGET", "score", "proba", "grade4"]:
