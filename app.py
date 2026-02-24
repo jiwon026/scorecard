@@ -903,6 +903,8 @@ bin_map   = build_value_points_map(bin_df)
 flag_map  = build_value_points_map(flag_df)
 job_ind_map = build_job_ind_map(job_ind_df)
 
+
+
 tabs = st.tabs([
     "① Overview",
     "② 고객 입력 & Explain",
@@ -1193,6 +1195,15 @@ with tabs[1]:
     st.caption("입력 Tip!\n - 산업군은 '상위 산업군'만 선택합니다. (무역/산업/운송은 제외)")
 
     left, right = st.columns([1.15, 1])
+    # 주거 형태 옵션을 scorecard_cat(=cat_map)에서 그대로 가져오기
+    housing_feat = "주거 형태_woe"
+    housing_options = list(cat_map.get(housing_feat, {}).keys())
+    
+    # 혹시 비어있으면(예외) fallback
+    if not housing_options:
+        housing_options = ["주택 / 아파트", "아파트 임대", "오피스텔", "공공분양", "기타"]
+    
+    주거 = st.selectbox("주거 형태", housing_options)
 
     with left:
         with st.form("demo_form"):
