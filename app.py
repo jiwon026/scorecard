@@ -1339,18 +1339,7 @@ with tabs[2]:
         horizontal=True
     )
 
-    if seg_mode == "고위험(점수≤549)":
-        df_seg = df_sc[df_sc["grade4"].eq("고위험")]
-    elif seg_mode == "위험+고위험(점수≤599)":
-        df_seg = df_sc[df_sc["grade4"].isin(["위험", "고위험"])]
-    else:
-        cut = float(np.quantile(df_sc["proba"].values, 0.80))
-        df_seg = df_sc[df_sc["proba"] >= cut]
 
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("전체 고객 수", f"{len(df_sc):,}")
-    k2.metric("상위 위험군 수", f"{len(df_seg):,}")
-    k3.metric("상위 위험군 비중", f"{(len(df_seg)/len(df_sc)*100):.1f}%" if len(df_sc) else "-")
     
 
     # 실제 연체율(타겟 있을 때)
