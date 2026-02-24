@@ -1422,32 +1422,26 @@ with tabs[2]:
         grade_order = ["우대","안정","위험","고위험"]
         piv = piv.reindex(columns=grade_order).sort_index()
         
-        def _is_missing(v):
-            if v is None:
-                return True
-            if isinstance(v, float) and np.isnan(v):
-                return True
-            if isinstance(v, str) and v.strip().lower() in ("none", "null", "nan", ""):
-                return True
-            return False
-        
-        # 1) 결측/None류를 전부 np.nan으로 통일 (핵심!!)
-        piv = piv.applymap(lambda v: np.nan if _is_missing(v) else v)
-        
-        # 2) 숫자로 강제 변환 (못 바꾸는건 NaN)
+        # 숫자형 강제 변환
         piv = piv.apply(pd.to_numeric, errors="coerce")
         
-        # 3) NaN 칸은 회색 처리
+        # 🔥 핵심: NaN을 제외하고 min/max 계산
+        valid_vals = piv.values[np.isfinite(piv.values)]
+        vmin = np.min(valid_vals) if len(valid_vals) else 0
+        vmax = np.max(valid_vals) if len(valid_vals) else 1
+        
         def na_gray(v):
-            return "background-color:#f2f2f2; color:#666;" if pd.isna(v) else ""
+            if pd.isna(v):
+                return "background-color:#f2f2f2; color:#666;"
+            return ""
         
         sty = (
             piv.style
               .applymap(na_gray)
-              .background_gradient(cmap="Reds", axis=None)
+              .background_gradient(cmap="Reds", vmin=vmin, vmax=vmax)
               .format("{:.2f}", na_rep="")
         )
-        st.write(piv.dtypes)
+        
         st.dataframe(sty, use_container_width=True)
     st.caption("값은 산업군×등급별 실제 연체율(%)입니다. 빈 칸은 표본 부족/결측으로 계산 불가한 경우입니다.")
 
