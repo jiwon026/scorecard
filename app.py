@@ -1375,10 +1375,17 @@ with tabs[2]:
     st.markdown("### 2) 변수별 위험 집중도(Lift) — 고위험군 대표 특징")
 
     # 후보 컬럼: 너희 샘플 컬럼에 맞춰 조정
-    default_cols = [c for c in ["수입 유형", "최종 학력", "결혼 여부", "주거 형태", "자녀수_구간", "산업군_상위",
-                                "성별", "가족 구성원 수", "업무용 휴대전화 소유 여부", "차량 소유 여부", "부동산 소유 여부",
-                                "한부모 가정", "나이", "근속연수", "가입연수", "연간 수입", "거주지 인구 비율"] if c in df_sc.columns]
-    candidate_cols = st.multiselect("분석할 변수 선택", options=list(df_sc.columns), default=default_cols)
+    # ✅ 너가 쓰는 변수만 고정 (화이트리스트)
+    ALLOWED_VARS = [
+        "수입 유형", "최종 학력", "결혼 여부", "주거 형태", "자녀수_구간",
+        "산업군_상위", "성별", "가족 구성원 수", "업무용 휴대전화 소유 여부",
+        "차량 소유 여부", "부동산 소유 여부", "한부모 가정",
+        "나이", "근속연수", "가입연수", "연간 수입", "거주지 인구 비율"
+    ]
+    
+    # ✅ 실제 df_sc에 존재하는 것만 남김
+    allowed_cols = [c for c in ALLOWED_VARS if c in df_sc.columns]
+    candidate_cols = st.multiselect("분석할 변수 선택", options=allowed_cols, index=0)
 
     rows = []
     for c in allowed_cols:
@@ -1523,20 +1530,9 @@ with tabs[2]:
         ax.legend()
     
         return fig
-    st.markdown("### 3) 연체(상위 위험군) 변수 분포 (전체 vs 상위 위험군)")
 
-    # ✅ 너가 쓰는 변수만 고정 (화이트리스트)
-    ALLOWED_VARS = [
-        "수입 유형", "최종 학력", "결혼 여부", "주거 형태", "자녀수_구간",
-        "산업군_상위", "성별", "가족 구성원 수", "업무용 휴대전화 소유 여부",
-        "차량 소유 여부", "부동산 소유 여부", "한부모 가정",
-        "나이", "근속연수", "가입연수", "연간 수입", "거주지 인구 비율"
-    ]
     
-    # ✅ 실제 df_sc에 존재하는 것만 남김
-    allowed_cols = [c for c in ALLOWED_VARS if c in df_sc.columns]
-    
-    st.markdown("### 2) 연체율 상위 그룹 변수 분포 (전체 vs 상위 위험군)")
+    st.markdown("### 3) 연체율 상위 그룹 변수 분포 (전체 vs 상위 위험군)")
     col = st.selectbox("비교할 변수 선택", options=allowed_cols, index=0)
     
     for col in cols:
