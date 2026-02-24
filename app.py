@@ -685,37 +685,37 @@ def compute_portfolio_kpis_from_df(df: pd.DataFrame,
         out["lift_by_grade"] = pd.DataFrame({"grade": grade_order, "lift": [np.nan]*len(grade_order)})
 
     return out
-    def build_upper_industry_options_and_rep(job_ind_df: pd.DataFrame, sample_path: Path):
-        def _upper_from_full(full: str) -> str:
-            full = str(full).strip()
-            parts = full.split()
-            if len(parts) >= 2 and parts[-1].isdigit():
-                return " ".join(parts[:-1]).strip()
-            m = re.match(r"^(.*?)(\d+)$", full)
-            if m:
-                return m.group(1).strip()
-            return full
-    
-        sample_path = Path(sample_path)
-        df_s = pd.read_parquet(sample_path) if sample_path.suffix.lower() == ".parquet" else pd.read_csv(sample_path)
-    
-        if "산업군_상위" not in df_s.columns:
-            raise ValueError("샘플 파일에 '산업군_상위' 컬럼이 없습니다.")
-    
-        options = df_s["산업군_상위"].dropna().astype(str).str.strip().unique().tolist()
-    
-        banned = {"무역", "산업", "운송"}
-        options = sorted([x for x in options if x not in banned])
-    
-        rep = {}
-        if "산업군" in job_ind_df.columns:
-            full_list = job_ind_df["산업군"].dropna().astype(str).tolist()
-            for full in full_list:
-                up = _upper_from_full(full)
-                if up not in rep:
-                    rep[up] = full
-    
-        return options, rep
+def build_upper_industry_options_and_rep(job_ind_df: pd.DataFrame, sample_path: Path):
+    def _upper_from_full(full: str) -> str:
+        full = str(full).strip()
+        parts = full.split()
+        if len(parts) >= 2 and parts[-1].isdigit():
+            return " ".join(parts[:-1]).strip()
+        m = re.match(r"^(.*?)(\d+)$", full)
+        if m:
+            return m.group(1).strip()
+        return full
+
+    sample_path = Path(sample_path)
+    df_s = pd.read_parquet(sample_path) if sample_path.suffix.lower() == ".parquet" else pd.read_csv(sample_path)
+
+    if "산업군_상위" not in df_s.columns:
+        raise ValueError("샘플 파일에 '산업군_상위' 컬럼이 없습니다.")
+
+    options = df_s["산업군_상위"].dropna().astype(str).str.strip().unique().tolist()
+
+    banned = {"무역", "산업", "운송"}
+    options = sorted([x for x in options if x not in banned])
+
+    rep = {}
+    if "산업군" in job_ind_df.columns:
+        full_list = job_ind_df["산업군"].dropna().astype(str).tolist()
+        for full in full_list:
+            up = _upper_from_full(full)
+            if up not in rep:
+                rep[up] = full
+
+    return options, rep
 
 def enrich_with_score(df: pd.DataFrame,
                       meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map):
