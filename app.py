@@ -1396,14 +1396,19 @@ with tabs[2]:
         if out is not None:
             rows.append(out)
     
-    top_df = pd.DataFrame(rows)
-    if top_df.empty:
-        st.warning("선택한 변수로 Lift를 계산할 수 없어요.")
+    if not lift_vars:
+        st.info("Lift 계산할 변수를 선택해주세요.")
     else:
-        top_df["위험 집중도"] = pd.to_numeric(top_df["위험 집중도"], errors="coerce")
-        top_df = top_df.dropna(subset=["위험 집중도"]).sort_values("위험 집중도", ascending=False).head(10)
-        top_df["위험 집중도"] = top_df["위험 집중도"].round(2)
-        st.dataframe(top_df, use_container_width=True)
+        top_df = pd.DataFrame(rows)
+        if top_df.empty:
+            st.warning("선택한 변수로 Lift를 계산할 수 없어요.")
+        else:
+            top_df["위험 집중도"] = pd.to_numeric(top_df["위험 집중도"], errors="coerce")
+            top_df = (top_df.dropna(subset=["위험 집중도"])
+                            .sort_values("위험 집중도", ascending=False)
+                            .head(10))
+            top_df["위험 집중도"] = top_df["위험 집중도"].round(2)
+            st.dataframe(top_df, use_container_width=True)
         st.caption("위험 집중도(Lift)는 ‘상위 위험군에서의 비중 / 전체에서의 비중’입니다. 1보다 크면 고위험군에 더 많이 몰려 있습니다.")
 
     st.divider()
@@ -1534,9 +1539,15 @@ with tabs[2]:
 
     
     st.markdown("### 3) 연체율 상위 그룹 변수 분포 (전체 vs 상위 위험군)")
-    dist_var = st.selectbox("비교할 변수 선택", options=allowed_cols, index=0, key="dist_var")
+
+    dist_var = st.selectbox(
+        "비교할 변수 선택 (분포)",
+        options=allowed_cols,
+        index=0,
+        key="dist_var"   # ✅ Lift와 완전 다른 key
+    )
     
-    fig = plot_dist_overall_vs_seg(df_sc, df_seg, col, top_n=10, bins=30)
+    fig = plot_dist_overall_vs_seg(df_sc, df_seg, dist_var, top_n=10, bins=30)
     if fig is not None:
         st.pyplot(fig, use_container_width=True)
 
