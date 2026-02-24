@@ -347,7 +347,7 @@ def score_one(row: dict,
     # ---- flags: 한부모 가정 / 저소득_부동산 X / 2,30대_저학력,고졸
     if "한부모 가정" in flag_map:
         spouse = int(row.get("배우자유무", 1))
-        child_bucket = row.get("자녀수_구간", "0")
+        child_bucket = str(row.get("자녀수_구간", "0")).strip()
         child_n = 3 if child_bucket == "3+" else int(child_bucket)
         is_single_parent = 1 if (spouse == 0 and child_n > 0) else 0
         pts = flag_map["한부모 가정"].get(is_single_parent, 0.0)
@@ -1217,11 +1217,12 @@ with tabs[1]:
                 # 선택된 상위 산업군을 실제 '산업군' 문자열로 매핑(예: 교육 -> 교육 2)
                 산업군 = upper_to_rep_full.get(산업군_상위, "")  # 내부 계산용
 
-                근속연수 = st.number_input("근속연수(년)", 0.0, 50.0, 3.0, step=0.5)
+                근속연수 = st.number_input("근속연수(년)", 0.0, 50.0, 3.0, step=1.0)
 
             with c3:
-                가입연수 = st.number_input("가입연수(년)", 0.0, 50.0, 5.0, step=0.5)
+                가입연수 = st.number_input("가입연수(년)", 0.0, 50.0, 5.0, step=1.0)
                 연간수입 = st.number_input("연간 수입(원)", 0, value=40_000_000, step=1_000_000)
+                st.caption(f"입력값: {연간수입:,.0f}원")
                 거주지 = st.number_input("거주지 인구 비율", 0.0, 1.0, 0.03, step=0.01)
 
             # 기타 입력(스코어카드에 쓰일 수 있음)
