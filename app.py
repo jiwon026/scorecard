@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib import font_manager
 
-# ---- 한글 설정 ----
+# ---- 한글 설정 ---- 
 def set_korean_font():
     base_dir = Path(__file__).resolve().parent
     font_path = base_dir / "artifacts" / "NanumGothic.ttf"
