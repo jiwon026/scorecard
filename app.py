@@ -931,7 +931,7 @@ with tabs[0]:
         dr_map = dict(zip(dr_df["grade"], dr_df["dr"]))
         dr = [dr_map.get(g, np.nan) for g in grade_order]
         
-        fig2, ax = plt.subplots(figsize=(8, 3.6))
+        fig2, ax = plt.subplots(figsize=(8, 4.6))
         ax.plot(x, dr, color="#E45756", marker="o", linewidth=2, label="등급별 실제 연체율(%)")
         
         ax.set_xticks(x)
