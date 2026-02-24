@@ -1317,7 +1317,7 @@ with tabs[1]:
 
         st.caption("점수(points)가 음수일수록 위험 요인(Score 감소), 양수일수록 안전 요인입니다.")
 
-with tabs[4]:
+with tabs[2]:
     st.subheader("Risk Insight (고위험군 분석)")
 
     # 샘플 로드
