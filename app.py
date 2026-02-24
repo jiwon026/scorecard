@@ -932,7 +932,7 @@ with tabs[0]:
         dr = [dr_map.get(g, np.nan) for g in grade_order]
         
         fig2, ax = plt.subplots(figsize=(8, 3.6))
-        ax.plot(x, dr, color="#E45756", marker="o", linewidth=2)
+        ax.plot(x, dr, color="#E45756", marker="o", linewidth=2, label="등급별 실제 연체율(%)")
         
         ax.set_xticks(x)
         ax.set_xticklabels(grade_order)
@@ -943,16 +943,33 @@ with tabs[0]:
         for i, v in enumerate(dr):
             if np.isnan(v):
                 continue
-            ax.text(i, v + (np.nanmax(dr)*0.03 if np.isfinite(np.nanmax(dr)) else 0.1), f"{v:.1f}%", ha="center", va="bottom", fontsize=10)
+        
+            # 기본 오프셋
+            dy = (np.nanmax(dr) * 0.03) if np.isfinite(np.nanmax(dr)) else 0.3
+        
+            # ✅ '안정'만 더 띄우기(겹침 방지)
+            if grade_order[i] == "안정":
+                dy *= 1.8
+        
+            ax.annotate(
+                f"{v:.1f}%",
+                (x[i], v),
+                textcoords="offset points",
+                xytext=(0, 10 if grade_order[i] == "안정" else 6),
+                ha="center",
+                va="bottom",
+                fontsize=10
+            )
         
         # 전체 평균 기준선(있을 때만)
         overall = kpi.get("overall_dr", np.nan)  # 0~1
         if not np.isnan(overall):
             y = overall * 100
-            ax.axhline(y, color="gray", linestyle="--", linewidth=1.5)
+            ax.axhline(y, color="gray", linestyle="--", linewidth=1.5, label=f"전체 평균 연체율({y:2f}%")
             ax.text(0.02, 0.92, f"전체 평균 연체율: {y:.2f}%", transform=ax.transAxes,
                     ha="left", va="top", fontsize=11,
                     bbox=dict(facecolor="white", edgecolor="gray", alpha=0.9))
+            ax.legend(loc="upper left", frameon=True)
         
         st.pyplot(fig2, use_container_width=True)
     except Exception as e:
