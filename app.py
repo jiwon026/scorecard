@@ -1425,7 +1425,35 @@ with tabs[2]:
         ax.legend()
     
         st.pyplot(fig, use_container_width=True)
-    
+        
+        unique_vals = df_sc[col].dropna().unique()
+
+        # 0/1 또는 True/False만 있으면 binary로 처리
+        is_binary = set(unique_vals).issubset({0,1}) or len(unique_vals) <= 2
+        # --- binary는 막대그래프로 ---
+        if is_binary:
+
+            a = df_sc[col]
+            s = df_seg[col]
+        
+            all_rate = a.mean() * 100
+            seg_rate = s.mean() * 100
+        
+            labels = ["0 (없음)", "1 (있음)"]
+        
+            fig, ax = plt.subplots(figsize=(6,4))
+        
+            ax.bar(["전체"], [all_rate], alpha=0.7, label="전체")
+            ax.bar(["상위 위험군"], [seg_rate], alpha=0.9, label="상위 위험군")
+        
+            ax.set_ylabel("1 비율 (%)")
+            ax.set_title(f"{col} = 1 비율 비교")
+        
+            ax.text(0, all_rate + 1, f"{all_rate:.1f}%", ha="center")
+            ax.text(1, seg_rate + 1, f"{seg_rate:.1f}%", ha="center")
+        
+            st.pyplot(fig, use_container_width=True)
+            
     else:
         # ----- 범주형: 막대 비교 -----
         top_n = st.slider("상위 카테고리 개수", 3, 10, 5)
