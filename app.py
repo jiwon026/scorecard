@@ -1299,23 +1299,40 @@ with tabs[1]:
     # Explain: 같은 탭 아래에 바로 표시
     # =========================
     st.divider()
-    st.subheader("Explainability: Reason Codes")
-
+    st.subheader("Explainability: Reason Codes (Top 5)")
+    
     if "last_bd" not in st.session_state:
         st.info("위에서 고객정보를 입력 후 등급을 산출하면, 왜 그런 결과인지 여기에서 바로 확인할 수 있어요.")
     else:
         bd = st.session_state["last_bd"].copy()
-
+    
+        # 안전하게 숫자 변환
+        bd["points"] = pd.to_numeric(bd["points"], errors="coerce")
+        bd = bd.dropna(subset=["points"])
+    
+        # ✅ 리스크를 높인 요인: points < 0 만
+        bd_risk = bd[bd["points"] < 0].sort_values("points").head(5)
+    
+        # ✅ 리스크를 낮춘 요인: points >= 0 만
+        bd_safe = bd[bd["points"] >= 0].sort_values("points", ascending=False).head(5)
+    
         cA, cB = st.columns(2)
+    
         with cA:
-            st.markdown("#### 리스크를 높인 요인 (Top 5)")
-            st.dataframe(bd.sort_values("points").head(5), use_container_width=True)
-
+            st.markdown("#### 🔺 리스크를 높인 요인 (Top 5)")
+            if bd_risk.empty:
+                st.caption("리스크를 높인 요인(points < 0)이 없습니다.")
+            else:
+                st.dataframe(bd_risk, use_container_width=True)
+    
         with cB:
-            st.markdown("#### 리스크를 낮춘 요인 (Top )")
-            st.dataframe(bd.sort_values("points", ascending=False).head(5), use_container_width=True)
-
-        st.caption("점수(points)가 음수일수록 위험 요인(Score 감소), 양수일수록 안전 요인입니다.")
+            st.markdown("#### 🔻 리스크를 낮춘 요인 (Top 5)")
+            if bd_safe.empty:
+                st.caption("리스크를 낮춘 요인(points ≥ 0)이 없습니다.")
+            else:
+                st.dataframe(bd_safe, use_container_width=True)
+    
+        st.caption("points가 음수일수록 점수를 깎아 위험을 높이고, 0 이상이면 점수를 유지/가산하여 위험을 낮춥니다.")
 
 with tabs[2]:
     st.subheader("Risk Insight (고위험군 분석)")
