@@ -931,13 +931,13 @@ with tabs[0]:
         dr_map = dict(zip(dr_df["grade"], dr_df["dr"]))
         dr = [dr_map.get(g, np.nan) for g in grade_order]
         
-        fig2, ax = plt.subplots(figsize=(8, 4.6))
+        fig2, ax = plt.subplots(figsize=(8, 3.6))
         ax.plot(x, dr, color="#E45756", marker="o", linewidth=2, label="등급별 실제 연체율(%)")
         
         ax.set_xticks(x)
         ax.set_xticklabels(grade_order)
         ax.set_ylabel("실제 연체율 (%)")
-        ax.set_ylim(0, (np.nanmax(dr) * 1.25) if np.isfinite(np.nanmax(dr)) else 1)
+        ax.set_ylim(0, (np.nanmax(dr) * 1.40) if np.isfinite(np.nanmax(dr)) else 1)
         
         # 값 라벨
         for i, v in enumerate(dr):
