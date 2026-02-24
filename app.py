@@ -1051,9 +1051,7 @@ with tabs[0]:
                 rows.append({
                     "구분 기준": col,
                     "대표 특성": high_val,
-                    "구성 비율(%)": high_rate * 100,
-                    "전체 비율(%)": overall_rate * 100,
-                    "Lift": lift
+                    "위험 집중도": lift
                 })
         
             top_df = pd.DataFrame(rows).dropna()
