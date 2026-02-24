@@ -1064,12 +1064,7 @@ with tabs[0]:
         
                 # 표 + 간단 bar chart
                 st.dataframe(top_df, use_container_width=True)
-        
-                fig, ax = plt.subplots(figsize=(8, 3.5))
-                ax.barh(top_df["변수"], top_df["Lift"])
-                ax.invert_yaxis()
-                ax.set_xlabel("Lift (고위험군 비중 / 전체 비중)")
-                st.pyplot(fig, use_container_width=True)
+    
         
                 st.caption("Lift가 1보다 크면, 해당 특징이 전체 대비 고위험군에 더 많이 나타납니다.")
     except Exception as e:
