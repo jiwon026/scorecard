@@ -1403,7 +1403,6 @@ with tabs[2]:
     # C) 산업군별 연체율 Heatmap (표 스타일링)
     # -------------------------
     st.markdown("### 3) 산업군별 연체율 Heatmap")
-    st.write(piv.dtypes)
     if "산업군_상위" not in df_sc.columns:
         st.warning("샘플 데이터에 '산업군_상위' 컬럼이 없습니다.")
     elif "TARGET" not in df_sc.columns:
@@ -1448,7 +1447,7 @@ with tabs[2]:
               .background_gradient(cmap="Reds", axis=None)
               .format("{:.2f}", na_rep="")
         )
-        
+        st.write(piv.dtypes)
         st.dataframe(sty, use_container_width=True)
     st.caption("값은 산업군×등급별 실제 연체율(%)입니다. 빈 칸은 표본 부족/결측으로 계산 불가한 경우입니다.")
 
