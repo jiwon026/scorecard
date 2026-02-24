@@ -980,64 +980,98 @@ with tabs[0]:
         )
         
         # =========================
-        # A) Score distribution + cutlines
+        # 2.5) 고위험군 공통 특징 Top5 (Overview용)
         # =========================
-        st.markdown("### 점수(Score) 분포")
-        fig, ax = plt.subplots(figsize=(8, 3.6))
-        ax.hist(enriched["score"], bins=30, alpha=0.85)
-        for cut, label in [(549, "고위험"), (599, "위험"), (669, "안정")]:
-            ax.axvline(cut, linestyle="--", linewidth=1.5)
-        ax.set_xlabel("Score")
-        ax.set_ylabel("고객 수")
-        st.pyplot(fig, use_container_width=True)
+        st.markdown("### 🔍 고위험군 공통 리스크 특징 (Top 5)")
         
-        # =========================
-        # B) PD decile lift chart (avg_pd vs actual DR)
-        # =========================
-        st.markdown("### PD 10분위 Lift (예측 vs 실제)")
-        if "TARGET" in enriched.columns:
-            dec = (
-                enriched.groupby("pd_decile")
-                .agg(n=("pd","size"), avg_pd=("pd","mean"), dr=("TARGET","mean"))
-                .reset_index()
-            )
-            dec["dr_pct"] = dec["dr"] * 100
-            dec["avg_pd_pct"] = dec["avg_pd"] * 100
+        # 분석할 변수 후보(샘플 파일에 실제로 있는 컬럼만 쓰면 됨)
+        candidate_cols = [
+            "수입 유형", "최종 학력", "결혼 여부", "주거 형태", "자녀수_구간",
+            "직업", "산업군_상위",
+            "차량 소유 여부", "부동산 소유 여부", "배우자유무",
+        ]
         
-            x = np.arange(len(dec))
-            fig, ax = plt.subplots(figsize=(8, 3.6))
-            ax.bar(x, dec["dr_pct"], alpha=0.8, label="실제 연체율(%)")
-            ax.plot(x, dec["avg_pd_pct"], marker="o", linewidth=2, label="평균 PD(%)")
-            ax.set_xticks(x)
-            ax.set_xticklabels(dec["pd_decile"].astype(str).tolist())
-            ax.set_ylabel("%")
-            ax.legend(loc="upper left")
-            st.pyplot(fig, use_container_width=True)
+        # 고위험군 mask (kpi에서 등급이 이미 계산되어 있거나, sample_df에 grade가 있으면 그걸 쓰면 됨)
+        if "GRADE" in sample_df.columns:
+            high_mask = sample_df["GRADE"].astype(str).eq("고위험")
         else:
-            st.info("TARGET이 없어 Lift 차트(실제 연체율)는 표시하지 않습니다.")
+            # compute_portfolio_kpis_from_df에서 grade 붙였으면 그 컬럼명에 맞춰 변경
+            # 예: sample_df["_grade4"] 등
+            high_mask = None
         
-        # =========================
-        # C) High-risk common drivers (Top decile vs rest)
-        # =========================
-        st.markdown("### 상위 연체그룹 공통 리스크 요인 (Reason-code 집계)")
-        high = enriched["pd_decile"].astype(str) == "D10"
-        pts_cols = [c for c in enriched.columns if c.startswith("pts_")]
+        # grade 컬럼이 없으면: kpi 계산 때 썼던 로직대로 grade를 한번 더 붙이는 게 안전
+        if high_mask is None:
+            # 1) sample_df로 확률 산출
+            records = sample_df.to_dict("records")
+            probas = np.empty(len(records), dtype=float)
+            scores = np.empty(len(records), dtype=float)
         
-        mean_high = enriched.loc[high, pts_cols].mean()
-        mean_rest = enriched.loc[~high, pts_cols].mean()
-        delta = (mean_high - mean_rest).sort_values()  # high가 더 음수면 위험 요인
+            for i, r in enumerate(records):
+                s, p = score_one_fast(r, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map)
+                scores[i] = s
+                probas[i] = p
         
-        top = delta.head(8).reset_index()
-        top.columns = ["feature", "delta_points"]
-        top["feature"] = top["feature"].str.replace("^pts_", "", regex=True)
+            # 2) 점수컷 기반 4등급 (네가 확정한 컷)
+            # 고위험: ~549 / 위험: 550~599 / 안정: 600~669 / 우대: 670~
+            def to_grade4(score):
+                if score <= 549:
+                    return "고위험"
+                elif score <= 599:
+                    return "위험"
+                elif score <= 669:
+                    return "안정"
+                else:
+                    return "우대"
         
-        fig, ax = plt.subplots(figsize=(8, 3.6))
-        ax.barh(top["feature"], top["delta_points"], alpha=0.85)
-        ax.set_xlabel("D10(상위 10%) - 나머지 평균 포인트 차이 (음수일수록 리스크)")
-        st.pyplot(fig, use_container_width=True)
+            grade4 = np.array([to_grade4(s) for s in scores])
+            high_mask = (grade4 == "고위험")
         
-        st.dataframe(top, use_container_width=True)
-        st.caption("해석: 상위 10% 고객에서 평균적으로 더 큰 점수 하락(음수 포인트)을 만드는 변수들입니다.")
+        # 고위험군 표본이 너무 적으면 안내
+        if high_mask.sum() < 20:
+            st.info("고위험군 표본이 적어(20명 미만) 특징 요약이 불안정할 수 있어요.")
+        else:
+            rows = []
+            for col in candidate_cols:
+                if col not in sample_df.columns:
+                    continue
+        
+                s = sample_df[col].astype(str).fillna("결측")
+                overall_top = s.value_counts(normalize=True).head(1)
+                high_top = s[high_mask].value_counts(normalize=True).head(1)
+        
+                if len(overall_top) == 0 or len(high_top) == 0:
+                    continue
+        
+                overall_val, overall_rate = overall_top.index[0], overall_top.iloc[0]
+                high_val, high_rate = high_top.index[0], high_top.iloc[0]
+        
+                # "고위험군에서 더 흔한 정도"를 점수화
+                lift = (high_rate / overall_rate) if overall_rate > 0 else np.nan
+        
+                rows.append({
+                    "변수": col,
+                    "고위험군 최빈값": high_val,
+                    "고위험군 비중(%)": high_rate * 100,
+                    "전체 비중(%)": overall_rate * 100,
+                    "Lift": lift
+                })
+        
+            top_df = pd.DataFrame(rows).dropna()
+            if top_df.empty:
+                st.warning("특징 요약을 만들 수 있는 컬럼이 부족해요. candidate_cols를 샘플 컬럼에 맞춰 조정해주세요.")
+            else:
+                top_df = top_df.sort_values("Lift", ascending=False).head(5)
+        
+                # 표 + 간단 bar chart
+                st.dataframe(top_df, use_container_width=True)
+        
+                fig, ax = plt.subplots(figsize=(8, 3.5))
+                ax.barh(top_df["변수"], top_df["Lift"])
+                ax.invert_yaxis()
+                ax.set_xlabel("Lift (고위험군 비중 / 전체 비중)")
+                st.pyplot(fig, use_container_width=True)
+        
+                st.caption("Lift가 1보다 크면, 해당 특징이 전체 대비 고위험군에 더 많이 나타납니다.")
     except Exception as e:
             st.warning(f"샘플 KPI를 계산하지 못했습니다: {e}")
     # =========================
