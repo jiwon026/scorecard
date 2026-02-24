@@ -1517,23 +1517,23 @@ with tabs[2]:
         ax.legend()
     
         return fig
-        st.markdown("### 3) 연체(상위 위험군) 변수 분포 (전체 vs 상위 위험군)")
+    st.markdown("### 3) 연체(상위 위험군) 변수 분포 (전체 vs 상위 위험군)")
 
-        default_cols = [
-            "수입 유형", "최종 학력", "결혼 여부", "주거 형태", "자녀수_구간",
-            "직업", "산업군_상위",
-            "차량 소유 여부", "부동산 소유 여부", "배우자유무",
-            "나이", "근속연수", "가입연수", "연간 수입", "거주지 인구 비율"
-        ]
-        default_cols = [c for c in default_cols if c in df_sc.columns]
-        
-        cols = st.multiselect("비교할 변수 선택", options=list(df_sc.columns), default=default_cols)
-        
-        for col in cols:
-            if col in ["TARGET", "score", "proba", "grade4"]:
-                continue
-            fig = plot_dist_overall_vs_seg(df_sc, df_seg, col, top_n=10, bins=30)
-            if fig is not None:
-                st.pyplot(fig, use_container_width=True)
+    default_cols = [
+        "수입 유형", "최종 학력", "결혼 여부", "주거 형태", "자녀수_구간",
+        "직업", "산업군_상위",
+        "차량 소유 여부", "부동산 소유 여부", "배우자유무",
+        "나이", "근속연수", "가입연수", "연간 수입", "거주지 인구 비율"
+    ]
+    default_cols = [c for c in default_cols if c in df_sc.columns]
+    
+    cols = st.multiselect("비교할 변수 선택", options=list(df_sc.columns), default=default_cols)
+    
+    for col in cols:
+        if col in ["TARGET", "score", "proba", "grade4"]:
+            continue
+        fig = plot_dist_overall_vs_seg(df_sc, df_seg, col, top_n=10, bins=30)
+        if fig is not None:
+            st.pyplot(fig, use_container_width=True)
 
 st.divider()
