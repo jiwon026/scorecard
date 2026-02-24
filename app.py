@@ -1432,6 +1432,6 @@ with tabs[2]:
     )
     
     st.dataframe(sty, use_container_width=True)
-        st.caption("값은 산업군×등급별 실제 연체율(%)입니다. 빈 칸은 표본 부족/결측으로 계산 불가한 경우입니다.")
+    st.caption("값은 산업군×등급별 실제 연체율(%)입니다. 빈 칸은 표본 부족/결측으로 계산 불가한 경우입니다.")
 
 st.divider()
