@@ -1420,13 +1420,12 @@ with tabs[2]:
         piv = piv.sort_index()
 
         # 표본 너무 적은 칸은 NaN으로 남겨두고(=데이터 부족), 표시만 깔끔하게
-        st.dataframe(
+        sty = (
             piv.style
-               .format("{:.2f}")
-               .set_na_rep("")
-               .background_gradient(cmap="Reds", axis=None),
-            use_container_width=True
+              .background_gradient(cmap="Reds", axis=None)
+              .format(lambda v: "" if pd.isna(v) else f"{v:.2f}")
         )
+        st.dataframe(sty, use_container_width=True)
         st.caption("값은 산업군×등급별 실제 연체율(%)입니다. 빈 칸은 표본 부족/결측으로 계산 불가한 경우입니다.")
 
 st.divider()
