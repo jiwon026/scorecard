@@ -1347,7 +1347,6 @@ with tabs[2]:
         cut = float(np.quantile(df_sc["proba"].values, 0.80))
         df_seg = df_sc[df_sc["proba"] >= cut]
 
-  
 
     # 실제 연체율(타겟 있을 때)
     if "TARGET" in df_sc.columns:
@@ -1395,5 +1394,52 @@ with tabs[2]:
 
     st.divider()
 
+    # -------------------------
+    # C) 연체율 상위 그룹 변수 분포
+    # -------------------------
+    st.markdown("### 3) 연체율 상위 그룹 변수 분포 (상위 위험군 vs 전체)")
+
+    # 분석할 변수 선택 (카테고리형 위주)
+    default_cols = [c for c in ["수입 유형","최종 학력","결혼 여부","주거 형태","자녀수_구간","직업","산업군_상위",
+                               "차량 소유 여부","부동산 소유 여부","배우자유무"]
+                    if c in df_sc.columns]
+    
+    cols = st.multiselect(
+        "분포를 볼 변수 선택",
+        options=[c for c in df_sc.columns if c not in ["score","proba","TARGET"]],
+        default=default_cols
+    )
+    
+    top_n = st.slider("각 변수에서 보여줄 상위 개수", 3, 10, 5, 1)
+    
+    def dist_compare(df_all, df_seg, col, top_n=5):
+        a = df_all[col].astype(str).fillna("결측").str.strip()
+        s = df_seg[col].astype(str).fillna("결측").str.strip()
+    
+        # 전체 Top 카테고리 기준으로 잡기(비교가 깔끔)
+        top_cats = a.value_counts().head(top_n).index.tolist()
+    
+        all_share = a.value_counts(normalize=True).reindex(top_cats).fillna(0) * 100
+        seg_share = s.value_counts(normalize=True).reindex(top_cats).fillna(0) * 100
+    
+        out = pd.DataFrame({
+            "카테고리": top_cats,
+            "상위 위험군 비중(%)": seg_share.values.round(2),
+            "전체 비중(%)": all_share.values.round(2),
+        })
+        # 차이와 간단 lift도 같이
+        out["차이(%p)"] = (out["상위 위험군 비중(%)"] - out["전체 비중(%)"]).round(2)
+        out["Lift"] = (out["상위 위험군 비중(%)"] / out["전체 비중(%)"]).replace([np.inf, -np.inf], np.nan).round(2)
+        return out.sort_values("Lift", ascending=False)
+    
+    if len(cols) == 0:
+        st.info("변수를 선택하면 상위 위험군과 전체의 분포를 비교해서 보여줄게요.")
+    else:
+        # 변수별로 표를 접어서 보기 좋게
+        for col in cols:
+            with st.expander(f"📌 {col} 분포 보기", expanded=False):
+                tbl = dist_compare(df_sc, df_seg, col, top_n=top_n)
+                st.dataframe(tbl, use_container_width=True)
+                st.caption("Lift = (상위 위험군 비중 / 전체 비중). 1보다 크면 상위 위험군에 과대표집된 특성이에요.")
 
 st.divider()
