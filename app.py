@@ -1317,64 +1317,142 @@ with tabs[1]:
 
         st.caption("점수(points)가 음수일수록 위험 요인(Score 감소), 양수일수록 안전 요인입니다.")
 
-def enrich_with_score(df: pd.DataFrame,
-                      meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map):
-    df2 = df.copy()
+with tabs[4]:
+    st.subheader("Risk Insight (고위험군 분석)")
 
-    # score/proba 계산
-    recs = df2.to_dict("records")
-    scores = np.empty(len(recs), dtype=float)
-    probas = np.empty(len(recs), dtype=float)
+    # 샘플 로드
+    base_dir = Path(__file__).resolve().parent
+    art_dir = base_dir / "artifacts"
+    sample_df = load_sample_df(art_dir)
 
-    for i, r in enumerate(recs):
-        s, p = score_one_fast(r, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map)
-        scores[i] = s
-        probas[i] = p
+    df_sc = enrich_with_score(sample_df, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map)
 
-    df2["score"] = scores
-    df2["proba"] = probas
+    # -------------------------
+    # A) 상위 위험군 vs 전체 평균 비교 (요약 KPI)
+    # -------------------------
+    st.markdown("### 1) 상위 위험군 vs 전체 평균")
 
-    # ✅ 너희가 정한 등급컷(점수 기반) 반영
-    # 고위험: ~549 / 위험: 550~599 / 안정: 600~669 / 우대: 670~
-    def grade4(score):
-        if score <= 549: return "고위험"
-        if score <= 599: return "위험"
-        if score <= 669: return "안정"
-        return "우대"
+    seg_mode = st.radio(
+        "상위 위험군 정의",
+        ["고위험(점수≤549)", "위험+고위험(점수≤599)", "PD 상위 20%(확률 기준)"],
+        horizontal=True
+    )
 
-    df2["grade4"] = df2["score"].apply(grade4)
+    if seg_mode == "고위험(점수≤549)":
+        df_seg = df_sc[df_sc["grade4"].eq("고위험")]
+    elif seg_mode == "위험+고위험(점수≤599)":
+        df_seg = df_sc[df_sc["grade4"].isin(["위험", "고위험"])]
+    else:
+        cut = float(np.quantile(df_sc["proba"].values, 0.80))
+        df_seg = df_sc[df_sc["proba"] >= cut]
 
-    # TARGET 정리(있으면)
-    if "TARGET" in df2.columns:
-        df2["TARGET"] = pd.to_numeric(df2["TARGET"], errors="coerce").fillna(0).astype(int)
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("전체 고객 수", f"{len(df_sc):,}")
+    k2.metric("상위 위험군 수", f"{len(df_seg):,}")
+    k3.metric("상위 위험군 비중", f"{(len(df_seg)/len(df_sc)*100):.1f}%" if len(df_sc) else "-")
 
-    return df2
+    # 실제 연체율(타겟 있을 때)
+    if "TARGET" in df_sc.columns:
+        overall_dr = df_sc["TARGET"].mean() * 100
+        seg_dr = df_seg["TARGET"].mean() * 100 if len(df_seg) else np.nan
+        k4.metric("상위 위험군 실제 연체율", f"{seg_dr:.2f}%")
+        st.caption(f"전체 평균 연체율: {overall_dr:.2f}%")
+    else:
+        k4.metric("상위 위험군 실제 연체율", "-")
+        st.caption("※ 샘플 데이터에 TARGET이 없어서 ‘실제 연체율’은 표시하지 않습니다.")
 
+    st.divider()
 
-def compute_lift_table(df_all: pd.DataFrame, df_seg: pd.DataFrame, col: str):
-    """
-    col별로: 고위험군 최빈값/구성비/전체비/위험집중도(Lift) 계산
-    Lift = seg_share / all_share
-    """
-    a = df_all[col].dropna().astype(str).str.strip()
-    s = df_seg[col].dropna().astype(str).str.strip()
+    # -------------------------
+    # B) 연체율 상위 그룹 변수 분포 + 변수별 Lift (표)
+    # -------------------------
+    st.markdown("### 2) 변수별 위험 집중도(Lift) — 고위험군 대표 특징")
 
-    if len(a) == 0 or len(s) == 0:
-        return None
+    # 후보 컬럼: 너희 샘플 컬럼에 맞춰 조정
+    default_cols = [c for c in ["수입 유형", "최종 학력", "직업", "산업군_상위", "주거 형태", "차량 소유 여부", "부동산 소유 여부"] if c in df_sc.columns]
+    candidate_cols = st.multiselect("분석할 변수 선택", options=list(df_sc.columns), default=default_cols)
 
-    all_dist = a.value_counts(normalize=True)
-    seg_dist = s.value_counts(normalize=True)
+    rows = []
+    for col in candidate_cols:
+        # 너무 연속형은 제외(원하면 bins로 추가 가능)
+        if col in ["score", "proba", "TARGET"]:
+            continue
+        out = compute_lift_table(df_sc, df_seg, col)
+        if out is not None:
+            rows.append(out)
 
-    # seg에서 가장 흔한 값(대표 특성)
-    top_val = seg_dist.index[0]
-    seg_share = float(seg_dist.get(top_val, 0.0))
-    all_share = float(all_dist.get(top_val, 0.0))
-    lift = (seg_share / all_share) if all_share > 0 else np.nan
+    top_df = pd.DataFrame(rows)
+    if top_df.empty:
+        st.warning("선택한 변수로 Lift를 계산할 수 없어요. (결측 많거나 문자열 변환 불가)")
+    else:
+        top_df["위험 집중도"] = pd.to_numeric(top_df["위험 집중도"], errors="coerce")
+        top_df = top_df.dropna(subset=["위험 집중도"]).sort_values("위험 집중도", ascending=False).head(10)
+        top_df["위험 집중도"] = top_df["위험 집중도"].round(2)
+        st.dataframe(top_df, use_container_width=True)
+        st.caption("위험 집중도(Lift)는 ‘상위 위험군에서의 비중 / 전체에서의 비중’입니다. 1보다 크면 고위험군에 더 많이 몰려 있습니다.")
 
-    return {
-        "구분 기준": col,
-        "대표 특성": top_val,
-        "위험 집중도": lift,
-    }
+    st.divider()
+
+    # -------------------------
+    # C) SHAP 기반 Top driver (대체: 점수카드 기반 Driver)
+    # -------------------------
+    st.markdown("### 3) Top Driver (Scorecard 기반)")
+
+    st.info("※ 현재 앱에는 SHAP 파일이 연결되어 있지 않아서, 대신 ‘점수카드(points)’ 기준으로 상위 위험군에서 점수를 가장 많이 깎는 요인을 집계합니다.")
+
+    # 상위 위험군에서 n명만 샘플링해서 breakdown 계산(너무 크면 느려짐)
+    n_driver = st.slider("Driver 집계 샘플 수", 200, 2000, 500, 100)
+    df_tmp = df_seg.sample(min(n_driver, len(df_seg)), random_state=42) if len(df_seg) else df_seg
+
+    if len(df_tmp) == 0:
+        st.warning("상위 위험군 표본이 없어서 Driver를 계산할 수 없어요.")
+    else:
+        # breakdown 합산
+        agg = {}
+        for r in df_tmp.to_dict("records"):
+            _, _, _, bd = score_one(r, meta, cont_map, cat_map, cross_map, bin_map, flag_map, job_ind_map)
+            # points가 음수일수록 위험 요인(점수 감소)
+            for _, row in bd.iterrows():
+                f = str(row["feature"])
+                p = float(row["points"])
+                agg[f] = agg.get(f, 0.0) + p
+
+        drv = (pd.DataFrame({"feature": list(agg.keys()), "total_points": list(agg.values())})
+               .sort_values("total_points")
+               .head(10))
+        st.dataframe(drv, use_container_width=True)
+        st.caption("total_points가 더 음수일수록 상위 위험군에서 ‘점수 감소 기여’가 큰 요인입니다. (SHAP의 방향성과 유사한 운영 설명용 지표)")
+
+    st.divider()
+
+    # -------------------------
+    # D) 산업군별 연체율 Heatmap (표 스타일링)
+    # -------------------------
+    st.markdown("### 4) 산업군별 연체율 Heatmap")
+
+    if "산업군_상위" not in df_sc.columns:
+        st.warning("샘플 데이터에 '산업군_상위' 컬럼이 없습니다.")
+    elif "TARGET" not in df_sc.columns:
+        st.warning("샘플 데이터에 TARGET이 없어서 산업군별 ‘실제 연체율’ Heatmap을 만들 수 없어요.")
+    else:
+        # 산업군_상위 x grade4 연체율(%)
+        piv = (
+            df_sc.pivot_table(
+                index="산업군_상위",
+                columns="grade4",
+                values="TARGET",
+                aggfunc="mean"
+            ) * 100
+        ).round(2)
+
+        # 보기 좋게 컬럼 순서 고정
+        col_order = [c for c in ["우대", "안정", "위험", "고위험"] if c in piv.columns]
+        piv = piv[col_order].sort_index()
+
+        st.dataframe(
+            piv.style.background_gradient(axis=None),
+            use_container_width=True
+        )
+        st.caption("값은 산업군별·등급별 ‘실제 연체율(%)’입니다. 색이 진할수록 연체율이 높습니다.")
 
 st.divider()
