@@ -1424,8 +1424,7 @@ with tabs[2]:
         piv = piv.reindex(columns=grade_order)
         piv = piv.sort_index()
         piv = piv.apply(pd.to_numeric, errors="coerce")
-        
-        # Heatmap 스타일
+
         sty = (
             piv.style
                 .background_gradient(cmap="Reds", axis=None)
