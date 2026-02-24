@@ -1386,7 +1386,7 @@ with tabs[2]:
     
     # ✅ 실제 df_sc에 존재하는 것만 남김
     allowed_cols = [c for c in ALLOWED_VARS if c in df_sc.columns]
-    lift_vars = st.multiselect("분석할 변수 선택", options=allowed_cols, default=[], key="lift_vars)
+    lift_vars = st.multiselect("분석할 변수 선택", options=allowed_cols, default=[], key="lift_vars")
 
     rows = []
     for c in lift_vars:
