@@ -1397,61 +1397,60 @@ with tabs[2]:
     # -------------------------
     # C) 연체율 상위 그룹 변수 분포
     # -------------------------
-    st.markdown("### 3) 연체율 상위 그룹 변수 분포 (막대 비교)")
+    st.markdown("### 2) 연체율 상위 그룹 변수 분포")
 
-    # 분석 변수 선택
-    candidate_cols = [
-        c for c in df_sc.columns
-        if c not in ["score","proba","TARGET"]
-    ]
+    col = st.selectbox("변수 선택", [c for c in df_sc.columns if c not in ["score","proba","TARGET"]])
     
-    col = st.selectbox("분포를 볼 변수 선택", candidate_cols)
+    # 수치형 판단 (숫자로 변환 가능한 비율로)
+    tmp_all = pd.to_numeric(df_sc[col], errors="coerce")
+    numeric_ratio = tmp_all.notna().mean()
     
-    top_n = st.slider("상위 카테고리 개수", 3, 10, 5)
+    is_numeric = numeric_ratio >= 0.7  # 70% 이상 숫자로 해석되면 수치형으로 간주
     
-    # 데이터 준비
-    a = df_sc[col].astype(str).fillna("결측").str.strip()
-    s = df_seg[col].astype(str).fillna("결측").str.strip()
+    if is_numeric:
+        # ----- 수치형: 겹친 히스토그램 -----
+        all_vals = pd.to_numeric(df_sc[col], errors="coerce").dropna().values
+        seg_vals = pd.to_numeric(df_seg[col], errors="coerce").dropna().values
     
-    # 전체 기준 Top N 카테고리
-    top_cats = a.value_counts().head(top_n).index.tolist()
+        bins = st.slider("bin 개수", 10, 60, 30)
     
-    all_share = (
-        a.value_counts(normalize=True)
-        .reindex(top_cats)
-        .fillna(0) * 100
-    )
+        fig, ax = plt.subplots(figsize=(8,4))
     
-    seg_share = (
-        s.value_counts(normalize=True)
-        .reindex(top_cats)
-        .fillna(0) * 100
-    )
+        ax.hist(all_vals, bins=bins, density=True, alpha=0.35, label="전체")
+        ax.hist(seg_vals, bins=bins, density=True, alpha=0.45, label="상위 위험군")
     
-    # ---- 막대그래프 ----
-    x = np.arange(len(top_cats))
-    width = 0.35
+        ax.set_title(f"{col} 분포 (전체 vs 상위 위험군)")
+        ax.set_ylabel("Density")
+        ax.set_xlabel(col)
+        ax.legend()
     
-    fig, ax = plt.subplots(figsize=(8,4))
+        st.pyplot(fig, use_container_width=True)
     
-    ax.bar(x - width/2, all_share.values, width, label="전체", alpha=0.7)
-    ax.bar(x + width/2, seg_share.values, width, label="상위 위험군", alpha=0.9)
+    else:
+        # ----- 범주형: 막대 비교 -----
+        top_n = st.slider("상위 카테고리 개수", 3, 10, 5)
     
-    ax.set_xticks(x)
-    ax.set_xticklabels(top_cats, rotation=30, ha="right")
-    ax.set_ylabel("비중 (%)")
-    ax.set_title(f"{col} 분포 비교")
-    ax.legend()
+        a = df_sc[col].astype(str).fillna("결측").str.strip()
+        s = df_seg[col].astype(str).fillna("결측").str.strip()
     
-    # 값 라벨
-    for i, v in enumerate(all_share.values):
-        ax.text(i - width/2, v + 0.5, f"{v:.1f}", ha="center", fontsize=9)
+        top_cats = a.value_counts().head(top_n).index.tolist()
     
-    for i, v in enumerate(seg_share.values):
-        ax.text(i + width/2, v + 0.5, f"{v:.1f}", ha="center", fontsize=9)
+        all_share = a.value_counts(normalize=True).reindex(top_cats).fillna(0) * 100
+        seg_share = s.value_counts(normalize=True).reindex(top_cats).fillna(0) * 100
     
-    st.pyplot(fig, use_container_width=True)
+        x = np.arange(len(top_cats))
+        width = 0.35
     
-    st.caption("상위 위험군에서 특정 특성이 더 많이 나타나면 두 막대 간 차이가 크게 나타납니다.")
+        fig, ax = plt.subplots(figsize=(8,4))
+        ax.bar(x - width/2, all_share.values, width, label="전체", alpha=0.7)
+        ax.bar(x + width/2, seg_share.values, width, label="상위 위험군", alpha=0.9)
+    
+        ax.set_xticks(x)
+        ax.set_xticklabels(top_cats, rotation=30, ha="right")
+        ax.set_ylabel("비중 (%)")
+        ax.set_title(f"{col} 분포 비교")
+        ax.legend()
+    
+        st.pyplot(fig, use_container_width=True)
 
 st.divider()
